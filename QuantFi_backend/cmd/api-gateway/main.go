@@ -1,22 +1,20 @@
 package main
 
 import (
-    "log"
+	"log"
 
-    "github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 
-    "quantfi_backend/cmd/api-gateway/router"
+	"quantfi_backend/cmd/api-gateway/router"
 )
 
 func main() {
-    r := gin.New()
-    r.Use(gin.Logger(), gin.Recovery())
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
 
-    router.Register(r)
+	router.Register(r)
 
-    if err := r.Run(); err != nil {
-        log.Fatalf("failed to start gin gateway: %v", err)
-    }
+	if err := r.Run(); err != nil {
+		log.Fatalf("failed to start gin gateway: %v", err)
+	}
 }
-
-
