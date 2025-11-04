@@ -143,11 +143,13 @@ contract UniswapV3Adapter is
         require(params.tokens.length == 2, "Invalid token length");
         //索引0和1是代币数量 2和3是最小代币数量
         require(params.amounts.length == 4, "Invalid amount length");
+        require(params.recipient != address(0), "Recipient address must be specified");
+
 
         //查看用户是否有代币
         for (uint256 i = 0; i < params.tokens.length; i++) {
             IERC20 token = IERC20(params.tokens[i]);
-            uint256 balance = token.balanceOf(params.user);
+            uint256 balance = token.balanceOf(params.recipient);
             require(balance >= params.amounts[i], "Insufficient balance");
             //验证授权
             require(
@@ -164,15 +166,15 @@ contract UniswapV3Adapter is
         }
 
         //计算手续费
-        uint256 amount0 = params.amounts[0] -
+        uint256 amount0DecreaseFee = params.amounts[0] -
             (params.amounts[0] * feeBase) /
             10000;
-        uint256 amount1 = params.amounts[1] -
+        uint256 amount1DecreaseFee = params.amounts[1] -
             (params.amounts[1] * feeBase) /
             10000;
         //授权给NonfungiblePositionManager
-        IERC20(params.tokens[0]).approve(inonfungiblePositionManager, amount0);
-        IERC20(params.tokens[1]).approve(inonfungiblePositionManager, amount1);
+        IERC20(params.tokens[0]).approve(inonfungiblePositionManager, amount0DecreaseFee);
+        IERC20(params.tokens[1]).approve(inonfungiblePositionManager, amount1DecreaseFee);
 
         //tick范围(需要设置提供流动性的tick范围 uniswap V3特性)
         uint256 tickLower = -887220;
@@ -195,19 +197,21 @@ contract UniswapV3Adapter is
         INonfungiblePositionManager.MintParams
             memory mintParams = INonfungiblePositionManager(
                 inonfungiblePositionManager
-            ).MintParams(
-                    params.tokens[0],
-                    params.tokens[1],
-                    feeBase,
-                    tickLower,
-                    tickUpper,
-                    amount0,
-                    amount1,
-                    params.amounts[2],
-                    params.amounts[3],
-                    params.recipient,
-                    params.deadline
-                );
+            ).MintParams({
+                token0: params.tokens[0],
+                token1: params.tokens[1],
+                fee: feeBase,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                amount0: amount0DecreaseFee,
+                amount1: amount1DecreaseFee,
+                amount0Min: params.amounts[2],
+                amount1Min: params.amounts[3],
+                recipient: params.recipient,
+                deadline: params.deadline
+
+            });
+                
         (
             uint256 tokenId,
             uint128 liquidity,
@@ -246,7 +250,60 @@ contract UniswapV3Adapter is
         OperationParams memory params,
         uint256 feeBase
     ) internal returns (OperationResult) {
-        require();
+        require(params.tokenId > 0, "Invalid tokenId");
+        require(params.amounts.length == 2, "Invalid amount length");
+        //验证tokenId是否属于用户
+        require(
+            inonfungiblePositionManager.ownerOf(params.tokenId) == params.recipient,
+            "Not owner"
+        );
+        //获取用户头寸
+        (,,,,liquidity,,) = inonfungiblePositionManager.positions(params.tokenId);
+        require(liquidity > 0, "Invalid liquidity");
+        //创建removeLiquidity参数
+        INonfungiblePositionManager.DecreaseLiquidityParams
+            memory decreaseLiquidityParams = INonfungiblePositionManager(
+                inonfungiblePositionManager
+            ).DecreaseLiquidityParams({
+                tokenId: params.tokenId,
+                liquidity: liquidity,
+                amount0Min: params.amounts[0],
+                amount1Min: params.amounts[1],
+                deadline: params.deadline
+            });
+        //减少流动性
+        (uint256 amount0, uint256 amount1) = inonfungiblePositionManager.decreaseLiquidity(
+            decreaseLiquidityParams
+        );
+
+        //创建collectParams参数
+        INonfungiblePositionManager.CollectParams
+            memory collectParams = INonfungiblePositionManager(
+                inonfungiblePositionManager
+            ).CollectParams({
+                tokenId: params.tokenId,
+                recipient: params.recipient,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            });
+        //收集手续费代币
+        (amount0, amount1) = inonfungiblePositionManager.collect(collectParams);
+
+        emit RemoveLiquidity(
+            params.tokenId,
+            params.recipient,
+            params.deadline,
+            amount0,
+            amount1
+        );
+        //返回移除流动性释放的代币数量
+        OperationResult result = new OperationResult();
+        result.amounts = new uint256[](2);
+        result.amounts[0] = amount0;
+        result.amounts[1] = amount1;
+        result.success = true;
+        result.message = "Remove liquidity successful";
+        return result;
     }
 
     //提取手续费
@@ -254,7 +311,39 @@ contract UniswapV3Adapter is
         OperationParams memory params,
         uint256 feeBase
     ) internal returns (OperationResult) {
-        require();
+        require(params.tokenId > 0, "Invalid tokenId");
+        require(params.amounts.length == 2, "Invalid amount length");
+        //验证tokenId是否属于用户
+        require(
+            inonfungiblePositionManager.ownerOf(params.tokenId) == params.recipient,
+            "Not owner"
+        );
+        //创建collectParams参数
+        INonfungiblePositionManager.CollectParams
+            memory collectParams = INonfungiblePositionManager(
+                inonfungiblePositionManager
+            ).CollectParams({
+                tokenId: params.tokenId,
+                recipient: params.recipient,
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            });
+        (uint256 amount0, uint256 amount1) = inonfungiblePositionManager.collect(collectParams);
+        emit CollectFees(
+            params.tokenId,
+            params.recipient,
+            amount0,
+            amount1
+        );
+        OperationResult result = new OperationResult();
+        result.amounts = new uint256[](2);
+        result.amounts[0] = amount0;
+        result.amounts[1] = amount1;
+        result.success = true;
+        result.message = "Collect fees successful";
+
+        return result;
+
     }
 
     function decodeTicks(
