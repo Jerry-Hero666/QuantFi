@@ -89,7 +89,8 @@ contract UniswapV3Adapter is
     ) external view override returns (bool) {
         return
             operationType == OperationType.ADD_LIQUIDITY ||
-            operationType == OperationType.REMOVE_LIQUIDITY;
+            operationType == OperationType.REMOVE_LIQUIDITY ||
+            operationType == OperationType.COLLECT_FEES;
     }
 
     // 获取支持的操作类型
@@ -99,9 +100,10 @@ contract UniswapV3Adapter is
         override
         returns (uint256[] memory)
     {
-        uint256[] memory operations = new uint256[](2);
+        uint256[] memory operations = new uint256[](3);
         operations[0] = uint256(OperationType.ADD_LIQUIDITY);
         operations[1] = uint256(OperationType.REMOVE_LIQUIDITY);
+        operations[2] = uint256(OperationType.COLLECT_FEES);
         return operations;
     }
 
