@@ -8,11 +8,13 @@ import "openzeppelin-contracts/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/INonfungiblePositionManager.sol";
+import "openzeppelin-contracts/contracts/token/ERC721/IERC721Receiver.sol";
 
 contract UniswapV3Adapter is
     IDefiAdapter,
     Initializable,
     OwnableUpgradeable,
+    IERC721Receiver,
     UUPSUpgradeable
 {
     address public inonfungiblePositionManager;
@@ -259,7 +261,6 @@ contract UniswapV3Adapter is
         OperationParams calldata params
     ) internal returns (OperationResult memory result) {
         require(params.tokenId > 0, "Invalid tokenId");
-        require(params.amounts.length == 2, "Invalid amount length");
         //验证tokenId是否属于用户
         require(
             INonfungiblePositionManager(inonfungiblePositionManager).ownerOf(
@@ -377,5 +378,42 @@ contract UniswapV3Adapter is
             tickLower := mload(add(data, 0x20))
             tickUpper := mload(add(data, 0x40))
         }
+    }
+    function position(
+        uint256 tokenId
+    )
+        external
+        view
+        returns (
+            uint96 nonce,
+            address operator,
+            address token0,
+            address token1,
+            uint24 fee,
+            int24 tickLower,
+            int24 tickUpper,
+            uint128 liquidity,
+            uint256 feeGrowthInside0LastX128,
+            uint256 feeGrowthInside1LastX128,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
+        )
+    {
+        return
+            INonfungiblePositionManager(inonfungiblePositionManager).positions(
+                tokenId
+            );
+    }
+
+    /**
+     * @dev 实现 IERC721Receiver 接口以接收 NFT
+     */
+    function onERC721Received(
+        address /* operator */,
+        address /* from */,
+        uint256 /* tokenId */,
+        bytes calldata /* data */
+    ) external pure override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }

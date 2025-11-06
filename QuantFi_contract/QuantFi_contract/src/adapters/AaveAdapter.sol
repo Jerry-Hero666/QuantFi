@@ -22,8 +22,8 @@ contract AaveAdapter is
         _disableInitializers();
     }
 
-    function initialize(address _aave) public initializer {
-        __Ownable_init();
+    function initialize(address _aave, address owner) public initializer {
+        __Ownable_init(owner);
         //__UUPSUpgradeable_init();
         aave = _aave;
     }
@@ -107,7 +107,7 @@ contract AaveAdapter is
             params.amounts[0]
         );
         // 授权给aave合约token
-        IERC20(aave).safeApprove(aave, params.amounts[0]);
+        IERC20(aave).approve(aave, params.amounts[0]);
         // 调用aave合约取款
         uint256 outputAmount = IAavePool(aave).withdraw(
             aave,
@@ -115,7 +115,6 @@ contract AaveAdapter is
             params.recipient
         );
 
-        result = new OperationResult();
         result.outputAmounts = new uint256[](1);
         result.outputAmounts[0] = outputAmount;
         result.success = true;
@@ -169,7 +168,6 @@ contract AaveAdapter is
             0
         );
 
-        result = new OperationResult();
         result.outputAmounts = new uint256[](1);
         result.outputAmounts[0] = amountToAave;
         result.success = true;
