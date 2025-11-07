@@ -3,9 +3,15 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {UniswapV3Adapter} from "../../src/adapters/UniswapV3Adapter.sol";
-import {OperationParams, OperationType, OperationResult} from "../../src/interfaces/IDefiAdapter.sol";
+import {
+    OperationParams,
+    OperationType,
+    OperationResult
+} from "../../src/interfaces/IDefiAdapter.sol";
 import {MockERC20} from "../../src/mock/MockERC20.sol";
-import {MockNonfungiblePositionManager} from "../../src/mock/MockNonfungiblePositionManager.sol";
+import {
+    MockNonfungiblePositionManager
+} from "../../src/mock/MockNonfungiblePositionManager.sol";
 import "forge-std/console.sol";
 import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
@@ -37,6 +43,7 @@ contract UniswapV3Test is Test {
 
         // 获取代理合约实例
         uniswapV3Adapter = UniswapV3Adapter(address(proxy));
+        testAddLiquidity();
     }
 
     function testAddLiquidity() external {
