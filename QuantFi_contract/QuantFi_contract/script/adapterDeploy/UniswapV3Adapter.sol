@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "forge-std/StdJson.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import "../src/adapters/UniswapV3Adapter.sol";
+import "../../src/adapters/UniswapV3Adapter.sol";
 
 contract UniswapV3AdapterDeploy is Script {
     using stdJson for string;

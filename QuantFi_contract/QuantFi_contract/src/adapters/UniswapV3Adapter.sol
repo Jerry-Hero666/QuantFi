@@ -56,8 +56,6 @@ contract UniswapV3Adapter is
         uint256 amount1Actual
     );
     event RemoveLiquidity(
-        address indexed token0,
-        address indexed token1,
         uint24 indexed fee,
         uint128 liquidity,
         uint256 amount0,
@@ -70,9 +68,6 @@ contract UniswapV3Adapter is
         uint256 amount1Actual
     );
     event CollectFees(
-        address indexed token0,
-        address indexed token1,
-        uint24 indexed fee,
         uint128 amount0,
         uint128 amount1,
         uint256 amount0Min,
@@ -302,8 +297,6 @@ contract UniswapV3Adapter is
         ).collect(collectParams);
 
         emit RemoveLiquidity(
-            params.tokens[0],
-            params.tokens[1],
             uint24(3000),
             uint128(liquidity),
             amount0,
@@ -349,9 +342,6 @@ contract UniswapV3Adapter is
             inonfungiblePositionManager
         ).collect(collectParams);
         emit CollectFees(
-            params.tokens[0],
-            params.tokens[1],
-            uint24(3000),
             uint128(amount0),
             uint128(amount1),
             0,
@@ -370,14 +360,16 @@ contract UniswapV3Adapter is
         return result;
     }
 
+    /**
+     * @dev 从 extraData 中解码 tick 参数
+     * @param data 编码的数据 (abi.encode(tickLower, tickUpper))
+     * @return tickLower 下限 tick
+     * @return tickUpper 上限 tick
+     */
     function decodeTicks(
-        bytes memory data
+        bytes calldata data
     ) external pure returns (int24 tickLower, int24 tickUpper) {
-        require(data.length == 32, "Invalid data length");
-        assembly {
-            tickLower := mload(add(data, 0x20))
-            tickUpper := mload(add(data, 0x40))
-        }
+        (tickLower, tickUpper) = abi.decode(data, (int24, int24));
     }
     function position(
         uint256 tokenId

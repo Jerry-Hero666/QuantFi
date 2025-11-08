@@ -8,7 +8,12 @@ import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../interfaces/ICurve.sol";
 
-contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDefiAdapter {
+contract CurveAdapter is
+    Initializable,
+    OwnableUpgradeable,
+    UUPSUpgradeable,
+    IDefiAdapter
+{
     using SafeERC20 for IERC20;
 
     address public curve;
@@ -30,7 +35,7 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
     event LiquidityAdded(
         address indexed user,
         address indexed pool,
-        uint256[] amounts,
+        uint256[3] amounts,
         uint256 lpTokens,
         uint256 timestamp
     );
@@ -98,8 +103,10 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
         require(params.tokens.length >= 1, "Invalid number of tokens");
         require(params.amounts.length == 4, "Invalid number of amounts");
 
-        uint256[] memory amounts = new uint256[](3);
-        amounts = params.amounts[0:3];
+        uint256[3] memory amounts;
+        amounts[0] = params.amounts[0];
+        amounts[1] = params.amounts[1];
+        amounts[2] = params.amounts[2];
 
         uint256 minLPToken = params.amounts[3];
         for (uint256 i = 0; i < params.tokens.length; i++) {
@@ -138,11 +145,11 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
             );
         }
         // 获取添加流动性前的合约LP代币数量
-        uint256 lpBalanceBefore = IERC20(curve3Pool).balanceOf(address(this));
+        uint256 lpBalanceBefore = IERC20(curve).balanceOf(address(this));
         //调用curve的add_liquidity方法
         ICurve(curve).add_liquidity(amounts, minLPToken);
         // 获取添加流动性后的合约LP代币数量
-        uint256 lpBalanceAfter = IERC20(curve3Pool).balanceOf(address(this));
+        uint256 lpBalanceAfter = IERC20(curve).balanceOf(address(this));
         //计算出新增的LP代币数量
         uint256 lpTokenAdded = lpBalanceAfter - lpBalanceBefore;
         //验证当前合约是不是已经收到ERC20的curve代币
@@ -164,13 +171,13 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
         );
         uint256[] memory netAmounts = new uint256[](1);
         netAmounts[0] = netLpTokens;
-        return OperationResult({
+
+        result = OperationResult({
             success: true,
             message: "Add liquidity successfully",
             outputAmounts: netAmounts,
-            returnData: abi.encode(netLpTokens)
-        })
-
+            data: abi.encode(netLpTokens)
+        });
     }
 
     function _handleRemoveLiquidity(
@@ -180,36 +187,66 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
         require(params.tokens.length >= 1, "Invalid number of tokens");
         require(params.amounts.length >= 4, "Invalid number of amounts");
         //验证用户有没有这么多token
-        require(IERC20(curve).balanceOf(params.recipient) >= params.amounts[0], "recipient Insufficient balance");
+        require(
+            IERC20(curve).balanceOf(params.recipient) >= params.amounts[0],
+            "recipient Insufficient balance"
+        );
         //验证用户是否授权给合约
-        require(IERC20(curve).allowance(params.recipient, address(this)) >= params.amounts[0], "Insufficient allowance");
+        require(
+            IERC20(curve).allowance(params.recipient, address(this)) >=
+                params.amounts[0],
+            "Insufficient allowance"
+        );
         //用户转给合约
-        IERC20(curve).safeTransferFrom(params.recipient, address(this), params.amounts[0]);
+        IERC20(curve).safeTransferFrom(
+            params.recipient,
+            address(this),
+            params.amounts[0]
+        );
         //验证合约余额
-        require(IERC20(curve).balanceOf(address(this)) >= params.amounts[0], "before remove liquidity. contract Insufficient balance");
+        require(
+            IERC20(curve).balanceOf(address(this)) >= params.amounts[0],
+            "before remove liquidity. contract Insufficient balance"
+        );
         //当前合约授权curve代币的代币给curve
         IERC20(curve).approve(curve, params.amounts[0]);
         //验证curve合约是否成功被授权
-        require(IERC20(curve).allowance(address(this), curve) >= params.amounts[0], "curve Insufficient allowance");
+        require(
+            IERC20(curve).allowance(address(this), curve) >= params.amounts[0],
+            "curve Insufficient allowance"
+        );
         uint256[] memory amountsBeforeRemove = new uint256[](3);
         //获取移除流动性前的合约3Pool 代币数量
         for (uint256 i = 0; i < params.tokens.length; i++) {
-            uint256 balanceBefore = IERC20(params.tokens[i]).balanceOf(address(this));
+            uint256 balanceBefore = IERC20(params.tokens[i]).balanceOf(
+                address(this)
+            );
             amountsBeforeRemove[i] = balanceBefore;
         }
         //移除流动性
-        ICurve(curve).remove_liquidity(params.amounts[0], [params.amounts[1], params.amounts[2], params.amounts[3]]);
+        ICurve(curve).remove_liquidity(
+            params.amounts[0],
+            [params.amounts[1], params.amounts[2], params.amounts[3]]
+        );
         uint256[] memory amountsAfterRemove = new uint256[](3);
         for (uint256 i = 0; i < params.tokens.length; i++) {
             //获取移除流动性后的合约3Pool 代币数量
-            uint256 balanceAfter = IERC20(params.tokens[i]).balanceOf(address(this));
+            uint256 balanceAfter = IERC20(params.tokens[i]).balanceOf(
+                address(this)
+            );
             //计算出移除流动性获取的代币数量
             uint256 amountRemoved = balanceAfter - amountsBeforeRemove[i];
             amountsAfterRemove[i] = amountRemoved;
             //验证当前合约是不是已经收到3Pool代币
-            require(amountRemoved >= 0, "after remove liquidity. current contract Insufficient balance");
+            require(
+                amountRemoved >= 0,
+                "after remove liquidity. current contract Insufficient balance"
+            );
             //将curve代币转给用户
-            IERC20(params.tokens[i]).safeTransfer(params.recipient, amountRemoved);
+            IERC20(params.tokens[i]).safeTransfer(
+                params.recipient,
+                amountRemoved
+            );
         }
         emit LiquidityRemoved(
             params.recipient,
@@ -218,12 +255,11 @@ contract CurveAdapter is Initializable, OwnableUpgradeable, UUPSUpgradeable, IDe
             amountsAfterRemove,
             block.timestamp
         );
-        return OperationResult({
+        result = OperationResult({
             success: true,
             message: "Remove liquidity successfully",
             outputAmounts: amountsAfterRemove,
-            returnData: abi.encode(amountsAfterRemove)
-        })
-        
+            data: abi.encode(amountsAfterRemove)
+        });
     }
 }

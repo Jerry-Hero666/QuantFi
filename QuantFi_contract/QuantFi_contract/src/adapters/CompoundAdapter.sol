@@ -25,11 +25,14 @@ contract CompoundAdapter is
         _disableInitializers();
     }
 
-    function initialize(address _compound, address _usdtToken, address _owner) public initializer {
-         require(_cUsdtToken != address(0), "Invalid cUSDT address");
+    function initialize(
+        address _compound,
+        address _usdtToken,
+        address _owner
+    ) public initializer {
+        require(_compound != address(0), "Invalid cUSDT address");
         require(_usdtToken != address(0), "Invalid USDT address");
         require(_owner != address(0), "Invalid owner address");
-        
 
         __Ownable_init(_owner);
         //__UUPSUpgradeable_init();
@@ -98,7 +101,10 @@ contract CompoundAdapter is
         require(params.tokens[0] == usdtToken, "Only USDT withdraws supported");
         require(params.amounts.length == 1, "Invalid amount length");
         require(params.amounts[0] > 0, "Amount must be greater than 0");
-        require(params.recipient != address(0), "Recipient address must be specified");
+        require(
+            params.recipient != address(0),
+            "Recipient address must be specified"
+        );
         // 检查用户余额
         require(
             IERC20(params.tokens[0]).balanceOf(params.recipient) >=
@@ -123,17 +129,22 @@ contract CompoundAdapter is
         uint256 amountAfterFee = (params.amounts[0] * (10000 - feeRateBps)) /
             10000;
         //适配器合约授权给compound合约
-        IERC20(params.tokens[0]).safeApprove(compound, amountAfterFee);
+        IERC20(params.tokens[0]).approve(compound, amountAfterFee);
         // 获取存款之前的适配器合约对应的ICToken数量
-        uint256 icTokenAmountsBeforeDeposit = ICToken(compound).balanceOf(address(this));
+        uint256 icTokenAmountsBeforeDeposit = ICToken(compound).balanceOf(
+            address(this)
+        );
         // 调用compound合约进行存款
         uint256 mintResult = ICToken(compound).mint(amountAfterFee);
         // 获取存款之后的适配器合约对应的ICToken数量
-        uint256 icTokenAmountsAfterDeposit = ICToken(compound).balanceOf(address(this));
-        uint256 icTokenAmounts = icTokenAmountsAfterDeposit - icTokenAmountsBeforeDeposit;
+        uint256 icTokenAmountsAfterDeposit = ICToken(compound).balanceOf(
+            address(this)
+        );
+        uint256 icTokenAmounts = icTokenAmountsAfterDeposit -
+            icTokenAmountsBeforeDeposit;
         require(mintResult == 0, "Compound mint failed");
         //将ICToken转给用户
-        ICToken(compound).safeTransfer(params.recipient, icTokenAmounts);
+        IERC20(compound).safeTransfer(params.recipient, icTokenAmounts);
 
         uint256[] memory optAmounts = new uint256[](1);
         optAmounts[0] = icTokenAmounts;
@@ -141,7 +152,7 @@ contract CompoundAdapter is
             success: true,
             message: "Deposit successful",
             outputAmounts: optAmounts,
-            data: abi.encodePacked(optAmounts);
+            data: abi.encodePacked(optAmounts)
         });
     }
 
@@ -154,13 +165,15 @@ contract CompoundAdapter is
         require(params.tokens[0] == usdtToken, "Only USDT withdraws supported");
         require(params.amounts.length == 1, "Invalid amount length");
         require(params.amounts[0] > 0, "Amount must be greater than 0");
-        require(params.recipient != address(0), "Recipient address must be specified");
-
+        require(
+            params.recipient != address(0),
+            "Recipient address must be specified"
+        );
 
         //验证用户有足够的ICToken代币
         //计算指定的usdtToken转换成ICToken的数量
-        uint256 exchangeRate = ICToken(cUsdtToken).exchangeRateCurrent();
-        uint256 icTokenAmounts =  params.amounts[0] * 1e18 / exchangeRate;
+        uint256 exchangeRate = ICToken(compound).exchangeRateCurrent();
+        uint256 icTokenAmounts = (params.amounts[0] * 1e18) / exchangeRate;
         require(
             IERC20(compound).balanceOf(params.recipient) >= icTokenAmounts,
             "Insufficient balance"
@@ -178,17 +191,22 @@ contract CompoundAdapter is
             icTokenAmounts
         );
         //适配器合约授权ICToken给compound合约
-        IERC20(compound).safeApprove(compound, params.amounts[0]);
+        IERC20(compound).approve(compound, params.amounts[0]);
         //获取取款之后的适配器合约对应的代币数量
-        uint256 tokenAmountsAfterWithdraw = IERC20(params.tokens[0]).balanceOf(address(this));
+        uint256 tokenAmountsBeforeWithdraw = IERC20(params.tokens[0]).balanceOf(
+            address(this)
+        );
         //调用compound合约进行赎回
         uint256 redeemResult = ICToken(compound).redeemUnderlying(
             params.amounts[0]
         );
         require(redeemResult == 0, "Compound redeem failed");
         //获取取款之后的适配器合约对应的代币数量
-        uint256 tokenAmountsAfterWithdraw = IERC20(params.tokens[0]).balanceOf(address(this));
-        uint256 tokenAmounts = tokenAmountsAfterWithdraw - tokenAmountsBeforeWithdraw;
+        uint256 tokenAmountsAfterWithdraw = IERC20(params.tokens[0]).balanceOf(
+            address(this)
+        );
+        uint256 tokenAmounts = tokenAmountsAfterWithdraw -
+            tokenAmountsBeforeWithdraw;
         //把底层资产转移给用户
         IERC20(params.tokens[0]).safeTransfer(params.recipient, tokenAmounts);
         uint256[] memory optAmounts = new uint256[](1);

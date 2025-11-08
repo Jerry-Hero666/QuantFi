@@ -17,15 +17,24 @@ contract AaveAdapter is
     using SafeERC20 for IERC20;
 
     address public aave;
+    address public aToken;
+    address public underlying;
 
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _aave, address owner) public initializer {
+    function initialize(
+        address _aave,
+        address _aToken,
+        address _underlying,
+        address owner
+    ) public initializer {
         __Ownable_init(owner);
         //__UUPSUpgradeable_init();
         aave = _aave;
+        aToken = _aToken;
+        underlying = _underlying;
     }
 
     function _authorizeUpgrade(
@@ -88,29 +97,16 @@ contract AaveAdapter is
         require(params.amounts.length == 1, "Invalid amounts length");
         require(params.tokens.length == 1, "Invalid tokens length");
         require(params.amounts[0] > 0, "Invalid amount");
-        require(params.tokens[0] != aave, "Invalid token");
+        require(params.tokens[0] == underlying, "Invalid token");
 
         //校验用户余额是否充足
         require(
-            IERC20(aave).balanceOf(params.recipient) >= params.amounts[0],
+            IERC20(aToken).balanceOf(params.recipient) >= params.amounts[0],
             "Insufficient balance"
         );
-        require(
-            IERC20(aave).allowance(params.recipient, address(this)) >=
-                params.amounts[0],
-            "Insufficient allowance"
-        );
-        //授权转账给合约输入金额
-        IERC20(aave).safeTransferFrom(
-            params.recipient,
-            address(this),
-            params.amounts[0]
-        );
-        // 授权给aave合约token
-        IERC20(aave).approve(aave, params.amounts[0]);
         // 调用aave合约取款
         uint256 outputAmount = IAavePool(aave).withdraw(
-            aave,
+            underlying,
             params.amounts[0],
             params.recipient
         );
@@ -159,7 +155,7 @@ contract AaveAdapter is
         uint256 amountToAave = inputAmount - fee;
 
         // 转账给aave合约
-        IERC20(params.tokens[0]).safeTransfer(aave, amountToAave);
+        IERC20(params.tokens[0]).approve(aave, amountToAave);
         // 调用aave合约存款
         IAavePool(aave).supply(
             params.tokens[0],

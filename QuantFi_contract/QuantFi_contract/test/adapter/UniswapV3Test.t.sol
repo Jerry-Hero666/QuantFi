@@ -3,15 +3,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {UniswapV3Adapter} from "../../src/adapters/UniswapV3Adapter.sol";
-import {
-    OperationParams,
-    OperationType,
-    OperationResult
-} from "../../src/interfaces/IDefiAdapter.sol";
+import {OperationParams, OperationType, OperationResult} from "../../src/interfaces/IDefiAdapter.sol";
 import {MockERC20} from "../../src/mock/MockERC20.sol";
-import {
-    MockNonfungiblePositionManager
-} from "../../src/mock/MockNonfungiblePositionManager.sol";
+import {MockNonfungiblePositionManager} from "../../src/mock/MockNonfungiblePositionManager.sol";
 import "forge-std/console.sol";
 import "openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
@@ -43,16 +37,20 @@ contract UniswapV3Test is Test {
 
         // 获取代理合约实例
         uniswapV3Adapter = UniswapV3Adapter(address(proxy));
-        testAddLiquidity();
     }
 
-    function testAddLiquidity() external {
+    function testAddLiquidity() public {
         usdc = new MockERC20("USDC", "USDC", 6);
         weth = new MockERC20("WETH", "WETH", 18);
         //获取usdc地址
         address usdcAddress = address(usdc);
         //获取weth地址
         address wethAddress = address(weth);
+
+        // 确保代币地址按正确顺序排列
+        address tokenA = usdcAddress < wethAddress ? usdcAddress : wethAddress;
+        address tokenB = usdcAddress < wethAddress ? wethAddress : usdcAddress;
+
         //模拟用户
         //授权
         usdc.approve(address(uniswapV3Adapter), 10000);
@@ -60,8 +58,8 @@ contract UniswapV3Test is Test {
         OperationParams memory params;
         params.operationType = OperationType.ADD_LIQUIDITY;
         params.tokens = new address[](2);
-        params.tokens[0] = usdcAddress;
-        params.tokens[1] = wethAddress;
+        params.tokens[0] = tokenA;
+        params.tokens[1] = tokenB;
 
         params.amounts = new uint256[](4);
         params.amounts[0] = 10000;
@@ -104,22 +102,67 @@ contract UniswapV3Test is Test {
     }
 
     function testRemoveLiquidity() public {
-        console.log("tokenId:", tokenId);
+        //先添加流动性
+        testAddLiquidity();
+        uint256 amount = 10000;
+        //mock合约中默认是50个基点的手续费收入
+        uint256 MOCK_YIELD_RATE = 50;
         OperationParams memory params;
         params.operationType = OperationType.REMOVE_LIQUIDITY;
         params.tokenId = tokenId;
-        params.amounts = new uint256[](1);
-        params.amounts[0] = tokenId;
+        params.amounts = new uint256[](2);
+        params.amounts[0] = 9900;
+        params.amounts[1] = 9900;
+
         params.recipient = address(this);
         params.deadline = block.timestamp + 1000;
         uint24 feeBaseRate = 30;
+        //把erc721代币授权给合约
+        IERC721(address(positionManager)).approve(
+            address(uniswapV3Adapter),
+            tokenId
+        );
         OperationResult memory result = uniswapV3Adapter.executeOperation(
             params,
             feeBaseRate
         );
         assertEq(result.success, true);
         console.log(result.outputAmounts[0]);
-        assertEq(result.outputAmounts[0], 9970);
-        assertEq(result.outputAmounts[1], 9970);
+        console.log(result.outputAmounts[1]);
+
+        uint256 amountActual = (((amount * (10000 - feeBaseRate)) / 10000) *
+            (10000 + MOCK_YIELD_RATE)) / 10000;
+        assertEq(result.outputAmounts[0], amountActual);
+        assertEq(result.outputAmounts[1], amountActual);
+    }
+
+    function testCollectFee() public {
+        //先添加流动性
+        testAddLiquidity();
+        uint256 amount = 10000;
+        //mock合约中默认是50个基点的手续费收入
+        uint256 MOCK_YIELD_RATE = 50;
+        OperationParams memory params;
+        params.operationType = OperationType.COLLECT_FEES;
+        params.tokenId = tokenId;
+        params.amounts = new uint256[](2);
+        params.amounts[0] = 9900;
+        params.amounts[1] = 9900;
+
+        params.recipient = address(this);
+        params.deadline = block.timestamp + 1000;
+        uint24 feeBaseRate = 30;
+        //把erc721代币授权给合约
+        IERC721(address(positionManager)).approve(
+            address(uniswapV3Adapter),
+            tokenId
+        );
+        OperationResult memory result = uniswapV3Adapter.executeOperation(
+            params,
+            feeBaseRate
+        );
+        assertEq(result.success, true);
+        console.log("result.amount0:", result.outputAmounts[0]);
+        console.log("result.amount1:", result.outputAmounts[1]);
     }
 }
