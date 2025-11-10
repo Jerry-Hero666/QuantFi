@@ -1,11 +1,11 @@
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import "../../IDexRouter.sol";
 import "../../lib/Model.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import "@uniswap/v3-periphery/contracts/interfaces/IQuoter.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/IQuoterV2.sol";
 import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -20,7 +20,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
     ISwapRouter public immutable swapRouter;
 
     // Uniswap V3 Quoter地址
-    IQuoter public immutable quoter;
+    IQuoterV2 public immutable quoter;
 
     // Uniswap V3工厂地址
     IUniswapV3Factory public immutable factory;
@@ -50,7 +50,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         require(_quoter != address(0), "UniswapV3Router: INVALID_QUOTER");
         require(_factory != address(0), "UniswapV3Router: INVALID_FACTORY");
         require(_owner != address(0), "UniswapV3Router: INVALID_OWNER");
-        quoter = IQuoter(_quoter);
+        quoter = IQuoterV2(_quoter);
         swapRouter = ISwapRouter(_swapRouter);
         factory = IUniswapV3Factory(_factory);
         exchangeableTokens = _exchangeableTokens;
@@ -126,7 +126,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         uint256 amountIn, 
         address tokenOut, 
         uint8 maxHops
-    ) external view override returns (Model.SwapPath memory swapPath) {
+    ) external override returns (Model.SwapPath memory swapPath) {
         swapPath.inputAmount = amountIn;
         swapPath.dexRouter = address(this);
         // 所有路径组合
@@ -168,12 +168,18 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         uint24 fee, 
         uint256 amountIn,
         uint160 sqrtPriceLimitX96
-    ) public view returns (uint256 amount){
-        try quoter.quoteExactInputSingle(tokenIn, tokenOut, fee, amountIn, sqrtPriceLimitX96) returns (uint256 amountOut) {
-                return amountOut;
+    ) public returns (uint256 ,uint160 ,uint32 ,uint256 ){
+        try quoter.quoteExactInputSingle(IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            amountIn: amountIn,
+            fee: fee,
+            sqrtPriceLimitX96: sqrtPriceLimitX96
+        })) returns (uint256 amountOut,uint160 sqrtPriceX96After,uint32 initializedTicksCrossed,uint256 gasEstimate) {
+                return (amountOut,sqrtPriceX96After,initializedTicksCrossed,gasEstimate);
             } catch {
                 // 如果查询失败，返回零
-                return 0;
+                return (0,0,0,0);
             }
     }
 
@@ -181,12 +187,12 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
     function getAmountOutMulti(
         bytes memory path, 
         uint256 amountIn
-    ) public view returns (uint256 amount){
-        try quoter.quoteExactInput(path, amountIn) returns (uint256 amountOut) {
-                return amountOut;
+    ) public returns (uint256 ,uint160[] memory,uint32[] memory,uint256 ){
+        try quoter.quoteExactInput(path, amountIn) returns (uint256 amountOut,uint160[] memory sqrtPriceX96AfterList,uint32[] memory initializedTicksCrossedList,uint256 gasEstimate) {
+                return (amountOut,sqrtPriceX96AfterList,initializedTicksCrossedList,gasEstimate);
             } catch {
                 // 如果查询失败，返回零
-                return 0;
+                return (0,new uint160[](0),new uint32[](0),0);
             }
     }
 
@@ -215,7 +221,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         uint256 resultIndex,
         address tokenOut,
         Model.SwapPath memory swapPath
-    ) private view returns (uint256) {
+    ) private returns (uint256) {
         // 达到目标长度，保存组合
         if (depth == combination.length - 1) {
             combination[depth] = tokenOut;
@@ -228,7 +234,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
                     path = bytes.concat(path, abi.encodePacked(combination[i - 1], fee, combination[i]));
                 }
             }
-            uint256 amountOut  = getAmountOutMulti(path, swapPath.inputAmount);
+            (uint256 amountOut,,,) = getAmountOutMulti(path, swapPath.inputAmount);
             if (amountOut > swapPath.outputAmount) {
                 swapPath.outputAmount = amountOut;
                 swapPath.path = pathRecord[resultIndex];

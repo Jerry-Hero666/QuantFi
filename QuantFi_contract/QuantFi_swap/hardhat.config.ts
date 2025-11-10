@@ -1,5 +1,8 @@
 import hardhatToolboxMochaEthersPlugin from "@nomicfoundation/hardhat-toolbox-mocha-ethers";
 import { configVariable, defineConfig } from "hardhat/config";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
@@ -7,15 +10,23 @@ export default defineConfig({
   solidity: {
     profiles: {
       default: {
-        version: "0.8.28",
-      },
-      production: {
-        version: "0.8.28",
+        version: "0.8.20",
         settings: {
           optimizer: {
             enabled: true,
             runs: 200,
           },
+          viaIR: true, // 启用 IR 优化，解决 "Stack too deep" 问题
+        },
+      },
+      production: {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+          viaIR: true, // 启用 IR 优化，解决 "Stack too deep" 问题
         },
       },
     },
@@ -32,8 +43,8 @@ export default defineConfig({
     sepolia: {
       type: "http",
       chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url: process.env.SEPOLIA_RPC_URL!,
+      accounts: [process.env.PRIVATE_KEY!],
     },
   },
 });

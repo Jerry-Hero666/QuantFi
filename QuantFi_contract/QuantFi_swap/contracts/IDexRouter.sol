@@ -1,6 +1,6 @@
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import "./lib/Model.sol";
 
@@ -37,7 +37,7 @@ interface IDexRouter {
      * @return path 包含最佳路径和输出数量的SwapPath结构体
      */
     function getAmountsOut(address tokenIn, uint256 amountIn, 
-                address tokenOut, uint8 maxHops) external view returns (Model.SwapPath memory path);
+                address tokenOut, uint8 maxHops) external returns (Model.SwapPath memory path);
 
     /**
      * @dev 返回DEX的名称

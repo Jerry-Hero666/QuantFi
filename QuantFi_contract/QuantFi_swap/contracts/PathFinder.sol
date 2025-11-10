@@ -1,6 +1,6 @@
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import "./IDexRouter.sol";
 import "./lib/Model.sol";
@@ -94,7 +94,7 @@ contract PathFinder is Ownable {
      * @param amountIn 输入代币数量
      * @return bestPath 最优交换路径
      */
-    function findOptimalPath(address tokenIn, uint256 amountIn) external view returns (Model.SwapPath memory bestPath) {
+    function findOptimalPath(address tokenIn, uint256 amountIn) external returns (Model.SwapPath memory bestPath) {
         require(tokenIn != address(0), "PathFinder: INVALID_TOKEN");
         require(amountIn > 0, "PathFinder: INVALID_AMOUNT");
 

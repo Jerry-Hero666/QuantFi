@@ -1,6 +1,6 @@
 
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import "./IDexRouter.sol";
 import "./PathFinder.sol";
@@ -34,7 +34,7 @@ contract TokenSwap is Ownable, ReentrancyGuard {
         string dexName
     );
 
-    constructor(address _pathFinder) Ownable(msg.sender) {
+    constructor(address _pathFinder, address _owner) Ownable(_owner) {
         pathFinder = PathFinder(_pathFinder);
     }
 
@@ -134,7 +134,7 @@ contract TokenSwap is Ownable, ReentrancyGuard {
     function getSwapToTargetQuote(
         address tokenIn,
         uint256 amountIn
-    ) external view returns (Model.SwapPath memory bestPath) {
+    ) external returns (Model.SwapPath memory bestPath) {
         bestPath = pathFinder.findOptimalPath(tokenIn, amountIn);
         return bestPath;
     }
