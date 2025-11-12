@@ -26,7 +26,7 @@ interface IDexRouter {
         uint256 amountOutMin,
         address to,
         uint256 deadline
-    ) external returns (uint256 amount);
+    ) external payable returns (uint256 amount);
 
     /**
      * @dev 返回给定输入数量的最佳输出代币数量，以及交换路径

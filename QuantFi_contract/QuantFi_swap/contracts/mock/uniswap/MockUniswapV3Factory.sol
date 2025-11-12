@@ -30,7 +30,7 @@ contract MockUniswapV3Pool {
 
 contract MockUniswapV3Factory is IUniswapV3Factory {
     mapping(uint24 => int24) public override feeAmountTickSpacing;
-    mapping(address => mapping(address => mapping(uint24 => address))) public override getPool;
+    mapping(address => mapping(address => mapping(uint24 => address))) public allPool;
 
     address public override owner;
     address public feeProtocolSetter;
@@ -53,7 +53,7 @@ contract MockUniswapV3Factory is IUniswapV3Factory {
     ) external override returns (address pool) {
         require(tokenA != tokenB, "UniswapV3Factory: IDENTICAL_ADDRESSES");
         require(tokenA != address(0) && tokenB != address(0), "UniswapV3Factory: ZERO_ADDRESS");
-        require(getPool[tokenA][tokenB][fee] == address(0), "UniswapV3Factory: POOL_EXISTS");
+        require(allPool[tokenA][tokenB][fee] == address(0), "UniswapV3Factory: POOL_EXISTS");
         require(feeAmountTickSpacing[fee] > 0, "UniswapV3Factory: INVALID_FEE");
 
         // 确保token0 < token1 用于一致性
@@ -63,8 +63,8 @@ contract MockUniswapV3Factory is IUniswapV3Factory {
         pool = address(new MockUniswapV3Pool(token0, token1, fee, feeAmountTickSpacing[fee], address(this)));
 
         // 更新映射
-        getPool[tokenA][tokenB][fee] = pool;
-        getPool[tokenB][tokenA][fee] = pool;
+        allPool[tokenA][tokenB][fee] = pool;
+        allPool[tokenB][tokenA][fee] = pool;
 
         emit PoolCreated(token0, token1, fee, feeAmountTickSpacing[fee], pool);
     }
@@ -98,5 +98,13 @@ contract MockUniswapV3Factory is IUniswapV3Factory {
         require(tickSpacing > 0 && (tickSpacing & (tickSpacing - 1)) == 0, "UniswapV3Factory: TICK_SPACING_NOT_POW_2");
         
         feeAmountTickSpacing[fee] = tickSpacing;
+    }
+
+     function getPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external view override returns (address pool){
+        return allPool[tokenA][tokenB][fee];
     }
 }

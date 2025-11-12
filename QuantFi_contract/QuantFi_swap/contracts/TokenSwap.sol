@@ -88,7 +88,7 @@ contract TokenSwap is Ownable, ReentrancyGuard {
         uint256 amountIn,
         uint256 minAmountOut,
         uint256 deadline
-    ) external nonReentrant returns (uint256 amountOut) {
+    ) external payable nonReentrant returns (uint256 amountOut) {
         require(block.timestamp <= deadline, "TokenSwap: TRANSACTION_EXPIRED");
         require(amountIn > 0, "TokenSwap: INVALID_AMOUNT");
 
@@ -100,19 +100,33 @@ contract TokenSwap is Ownable, ReentrancyGuard {
         // 获取DEX名称
         string memory dexName = IDexRouter(bestPath.dexRouter).dexName();
 
-        // 批准路由器使用代币
-        IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
-        IERC20(tokenIn).approve(bestPath.dexRouter, amountIn);
-
-        // 执行交换
-        amountOut = IDexRouter(bestPath.dexRouter).swapTokensForTokens(
-            bestPath,
-            tokenIn,
-            amountIn,
-            minAmountOut,
-            msg.sender,
-            deadline
-        );
+        if(tokenIn == address(0)) {
+            require(msg.value > 0, "TokenSwap: INSUFFICIENT_ETH_SENT");
+            amountIn = msg.value;
+            // 执行交换
+            amountOut = IDexRouter(bestPath.dexRouter).swapTokensForTokens{value: amountIn}(
+                bestPath,
+                tokenIn,
+                amountIn,
+                minAmountOut,
+                msg.sender,
+                deadline
+            );
+        } else {
+            // 批准路由器使用代币
+            IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(tokenIn).approve(bestPath.dexRouter, amountIn);
+            // 执行交换
+            amountOut = IDexRouter(bestPath.dexRouter).swapTokensForTokens(
+                bestPath,
+                tokenIn,
+                amountIn,
+                minAmountOut,
+                msg.sender,
+                deadline
+            );
+        }
+        
 
         emit Swapped(
             tokenIn,
