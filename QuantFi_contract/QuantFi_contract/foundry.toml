@@ -5,6 +5,7 @@ libs = ["lib"]
 optimizer = true
 optimizer_runs = 200
 via_ir = true
+fs_permissions = [{ access = "read-write", path = "/Users/wudianzheng/vscodeProject/QuantFi/QuantFi_contract/QuantFi_contract/" }]
 
 [rpc_endpoints]
 hyperliquid_testnet = "${TESTNET_RPC_URL}"

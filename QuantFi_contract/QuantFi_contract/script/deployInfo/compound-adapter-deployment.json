@@ -1,0 +1,10 @@
+{
+  "network": "11155111",
+  "chainId": 11155111,
+  "implementation": "0x297688A903c76726563802b673B9530268A7Fd43",
+  "proxy": "0xE1D6DeAC5a776680Cc6a325d6dc38D31cF35DFfc",
+  "compoundAddress": "0xebB9532E04997F4703f3cC5b64dd18F7dF7d482e",
+  "usdtTokenAddress": "0x220a862A933Bb6932F37903553fFBb1d535a9f11",
+  "owner": "0x4827A464729647f2d3d98691BA9c5B95671a15DA",
+  "deployedAt": 1763203140
+}

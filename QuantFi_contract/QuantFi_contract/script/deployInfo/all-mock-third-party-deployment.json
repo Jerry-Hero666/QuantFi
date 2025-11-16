@@ -1,0 +1,9 @@
+{
+  "network": "11155111",
+  "chainId": 11155111,
+  "mockCurve": "0x875d0cdCCd2F03106a3E25D90135ef4c6D955B06",
+  "mockAavePool": "0x220a862A933Bb6932F37903553fFBb1d535a9f11",
+  "mockCToken": "0xebB9532E04997F4703f3cC5b64dd18F7dF7d482e",
+  "mockPositionManager": "0xaF0CDE16f7c61dB91e031b1ed2aED663F64E869E",
+  "deployedAt": 1763202756
+}

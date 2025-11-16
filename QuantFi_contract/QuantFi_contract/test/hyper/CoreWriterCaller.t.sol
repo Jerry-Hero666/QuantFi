@@ -24,7 +24,7 @@
 //         tradingContract = new TradingContract();
 //         // 结束 prank，再以 user 身份调用 initialize
 //         ERC1967Proxy proxy = new ERC1967Proxy(
-//             address(tradingContract),
+//             address(tradingContract),、
 //             abi.encodeWithSelector(TradingContract.initialize.selector, user)
 //         );
 //         tradingContract = TradingContract(address(proxy));

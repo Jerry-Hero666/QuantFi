@@ -25,7 +25,7 @@ contract CurveAdapter is
     function initialize(address _curve, address owner) public initializer {
         __Ownable_init(owner);
         //__UUPSUpgradeable_init();
-        _curve = curve;
+        curve = _curve;
     }
 
     function _authorizeUpgrade(

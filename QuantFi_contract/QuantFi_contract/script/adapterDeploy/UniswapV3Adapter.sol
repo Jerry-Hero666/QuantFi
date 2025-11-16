@@ -5,18 +5,30 @@ import "forge-std/Script.sol";
 import "forge-std/StdJson.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../../src/adapters/UniswapV3Adapter.sol";
+import "../../src/mock/MockERC20.sol";
 
 contract UniswapV3AdapterDeploy is Script {
     using stdJson for string;
 
-    string private constant DEPLOYMENT_FILE = "deployment.json";
+    string private constant DEPLOYMENT_FILE =
+        "script/deployInfo/uniswap-adapter-deployment.json";
+    string private constant TOKENS_DEPLOYMENT_FILE =
+        "script/deployInfo/all-tokens-deployment.json";
 
     function run() external {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_1");
-        address owner = vm.envAddress("PRIVATE_KEY_2");
+        bytes32 deployerPrivateKey = vm.envBytes32("PRIVATE_KEY_1");
         address positionManager = vm.envAddress("POSITION_MANAGER");
+        bytes32 ownerPrivateKey = vm.envBytes32("PRIVATE_KEY_2");
+        address owner = vm.addr(uint256(ownerPrivateKey));
 
-        vm.startBroadcast(deployerPrivateKey);
+        // 读取已部署的代币地址
+        string memory tokensDeploymentData = vm.readFile(
+            TOKENS_DEPLOYMENT_FILE
+        );
+        address usdc = stdJson.readAddress(tokensDeploymentData, ".usdc");
+        address weth = stdJson.readAddress(tokensDeploymentData, ".weth");
+
+        vm.startBroadcast(uint256(deployerPrivateKey));
 
         // 部署实现合约
         UniswapV3Adapter implementation = new UniswapV3Adapter();
@@ -48,7 +60,9 @@ contract UniswapV3AdapterDeploy is Script {
             address(implementation),
             address(proxy),
             positionManager,
-            owner
+            owner,
+            usdc,
+            weth
         );
     }
 
@@ -56,24 +70,88 @@ contract UniswapV3AdapterDeploy is Script {
         address implementation,
         address proxy,
         address positionManager,
-        address owner
+        address owner,
+        address usdc,
+        address weth
     ) internal {
-        // 创建JSON对象
-        string memory json = "deployment";
-
-        // 添加部署信息
-        json.serialize("network", vm.toString(block.chainid));
-        json.serialize("implementation", vm.toString(implementation));
-        json.serialize("proxy", vm.toString(proxy));
-        json.serialize("positionManager", vm.toString(positionManager));
-        json.serialize("owner", vm.toString(owner));
-        json.serialize("deployedAt", block.timestamp);
-
-        // 完成序列化
-        string memory finalJson = json.serialize("chainId", block.chainid);
+        // 手动构建格式化的JSON字符串
+        string memory formattedJson = "{\n";
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "network": "',
+                vm.toString(block.chainid),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "chainId": ',
+                vm.toString(block.chainid),
+                ",\n"
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "implementation": "',
+                vm.toString(implementation),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "proxy": "',
+                vm.toString(proxy),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "positionManager": "',
+                vm.toString(positionManager),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "owner": "',
+                vm.toString(owner),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "mockUsdc": "',
+                vm.toString(usdc),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "mockWeth": "',
+                vm.toString(weth),
+                '",\n'
+            )
+        );
+        formattedJson = string(
+            abi.encodePacked(
+                formattedJson,
+                '  "deployedAt": ',
+                vm.toString(block.timestamp),
+                "\n"
+            )
+        );
+        formattedJson = string(abi.encodePacked(formattedJson, "}\n"));
 
         // 写入文件
-        vm.writeJson(finalJson, DEPLOYMENT_FILE);
+        vm.writeFile(DEPLOYMENT_FILE, formattedJson);
 
         console.log("Deployment info written to:", DEPLOYMENT_FILE);
     }
