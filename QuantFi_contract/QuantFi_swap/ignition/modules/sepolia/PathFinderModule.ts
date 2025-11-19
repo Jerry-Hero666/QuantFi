@@ -1,6 +1,6 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 
-const usdcAddress = "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238"; // USDC address on Sepolia testnet
+const usdtAddress = "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0"; // USDT address on Sepolia testnet
 const maxHops = 4; // Default maximum number of hops
 
 export default buildModule("PathFinderModule", (m) => {
@@ -9,7 +9,7 @@ export default buildModule("PathFinderModule", (m) => {
 
   // 部署PathFinder合约
   const PathFinder = m.contract("PathFinder", [
-    usdcAddress,
+    usdtAddress,
     maxHops,
     account
   ]);

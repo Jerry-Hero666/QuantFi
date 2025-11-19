@@ -176,7 +176,7 @@ async function setMockPrices({quoter, swapRouter, tokens}, ethers) {
                 await tokens[symbolA].getAddress(), 
                 await tokens[symbolB].getAddress(), 
             )
-            console.log(`设置价格: 1 ${symbolA} = ${ethers.formatUnits(price, symbolB == "USDT" ? 6 : 18)} ${symbolB}, 测试获取价格结果: 1 ${symbolA} = ${ethers.formatUnits(result, symbolB == "USDT" ? 6 : 18)} ${symbolB}`);
+            // console.log(`设置价格: 1 ${symbolA} = ${ethers.formatUnits(price, symbolB == "USDT" ? 6 : 18)} ${symbolB}, 测试获取价格结果: 1 ${symbolA} = ${ethers.formatUnits(result, symbolB == "USDT" ? 6 : 18)} ${symbolB}`);
         }
     }
 

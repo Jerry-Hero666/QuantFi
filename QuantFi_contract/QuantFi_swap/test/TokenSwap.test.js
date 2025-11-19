@@ -1,4 +1,4 @@
-import {expect} from "chai";
+import { expect } from "chai";
 import { network } from "hardhat";
 import { deployUniswapV3Mocks } from "./util/UniswapV3PreDeployment";
 
@@ -38,9 +38,9 @@ describe("UniswapV3Router test", function () {
     const tokenSwapAddress = await tokenSwap.getAddress();
     // console.log("TokenSwap deployed to:", tokenSwapAddress);
     await pathFinder.transferOwnership(tokenSwapAddress);
-  
-    
-    
+
+
+
     const UniswapV3Router = await ethers.getContractFactory("UniswapV3Router");
     const uniswapV3FactoryAddress = await factory.getAddress();
     const uniswapV3QuoterV2Address = await quoter.getAddress();
@@ -58,7 +58,7 @@ describe("UniswapV3Router test", function () {
     uniswapV3Router = await UniswapV3Router.deploy(...Object.values(deployParams));
     await uniswapV3Router.waitForDeployment();
     // console.log("UniswapV3Router deployed to:", await uniswapV3Router.getAddress());
-    for (let i = 0; i < exchangeTokens.length - 1; i++) {      
+    for (let i = 0; i < exchangeTokens.length; i++) {
       const tokenA = exchangeTokens[i];
       for (let j = i + 1; j < exchangeTokens.length; j++) {
         const tokenB = exchangeTokens[j];
@@ -84,28 +84,28 @@ describe("UniswapV3Router test", function () {
     expect(finderV3Addr).to.equal(ethers.ZeroAddress);
   })
 
-  it("setMaxHops", async() => {
+  it("setMaxHops", async () => {
     await tokenSwap.setMaxHops(maxHops);
     const hops = await pathFinder.maxHops();
     expect(hops).to.equal(maxHops);
   })
 
-  it("setTargetToken", async() => {
+  it("setTargetToken", async () => {
     await tokenSwap.setTargetToken(await tokens.UNI.getAddress());
     const target = await pathFinder.targetToken();
     expect(target).to.equal(await tokens.UNI.getAddress());
   })
 
-  it("getSwapToTargetQuote", async() => {
+  it("getSwapToTargetQuote", async () => {
     await tokenSwap.setMaxHops(maxHops);
-    const tokenAddr = await tokens.BNB.getAddress();
+    const tokenAddr = await tokens.ETH.getAddress();
     const result = await tokenSwap.getSwapToTargetQuote.staticCall(tokenAddr, ethers.parseUnits("1", 18));
     console.log("最优路径结果:", result);
-    console.log("1BNB最多换到的USDT:", ethers.formatUnits(result[2], 6));
+    console.log("1ETH最多换到的USDT:", ethers.formatUnits(result[2], 6));
     expect(result[2]).to.be.gt(0);
   })
 
-  it("swapToTarget BNB", async() => {
+  it("swapToTarget BNB", async () => {
     // await tokens.BNB.mint(account1.address, ethers.parseUnits("10", 18));
     await tokens.BNB.connect(deployer).transfer(account1.address, ethers.parseUnits("10", 18));
     const balance = await tokens.BNB.balanceOf(account1.address);
@@ -126,7 +126,7 @@ describe("UniswapV3Router test", function () {
     expect(await tokens.USDT.balanceOf(account1.address)).to.be.gte(ethers.parseUnits("390", 6));
   })
 
-  it("swapToTarget ETH", async() => {
+  it("swapToTarget ETH", async () => {
 
     const tokenAddr = ethers.ZeroAddress;
     const amountIn = ethers.parseUnits("100", 18);
@@ -136,6 +136,38 @@ describe("UniswapV3Router test", function () {
     // 1 ETH = 2000 USDT
     console.log("account1 USDT balance:", ethers.formatUnits(await tokens.USDT.balanceOf(account1.address), 6));
     expect(await tokens.USDT.balanceOf(account1.address)).to.be.gte(ethers.parseUnits("190000", 6));
+  })
+
+  it("dexRouter swapTokensForTokens", async () => {
+    
+    const amountIn = ethers.parseUnits("1", 18); // 1 ETH
+    const swapInfo = await tokenSwap.getSwapToTargetQuote.staticCall(ethers.ZeroAddress, amountIn);
+    console.log("swapInfo:", swapInfo);
+    // swapInfo 返回的是一个数组，需要转换为对象
+    const swapInfoObj = {
+      path: [...swapInfo[0]],
+      pathBytes: swapInfo[1],
+      outputAmount: swapInfo[2],
+      inputAmount: swapInfo[3],
+      dexRouter: swapInfo[4],
+    };
+    const dexRouter = await ethers.getContractAt("IDexRouter", swapInfoObj.dexRouter);
+    const res1 = await tokens.USDT.balanceOf(account1.address);
+    const tx = await dexRouter.swapTokensForTokens(
+      swapInfoObj,
+      ethers.ZeroAddress,
+      amountIn,
+      0,
+      account1.address,
+      Math.floor(Date.now() / 1000) + 6000,
+      {
+        value: amountIn,
+        gasLimit: 300000, // 设置合适的 gas limit
+        gasPrice: ethers.parseUnits("10", "gwei")
+      });
+    await tx.wait();
+    const res2 = await tokens.USDT.balanceOf(account1.address);
+    expect(res2).to.be.gt(res1);
   })
 
 });

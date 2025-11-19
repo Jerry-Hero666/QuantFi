@@ -1,7 +1,7 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
 import pathfinder from "./PathFinderModule.js";
 
-const usdcAddress = "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238"; // USDC address on Sepolia testnet
+const usdtAddress = "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0"; // USDT address on Sepolia testnet
 
 export default buildModule("TokenSwapModule", (m) => {
   const PathFinderModule = m.useModule(pathfinder);
@@ -16,10 +16,10 @@ export default buildModule("TokenSwapModule", (m) => {
   ]);
 
   // 将PathFinder的所有权转移给TokenSwap
-  const call1 = m.call(PathFinderModule.PathFinder, "transferOwnership", [TokenSwap], {id: "transferPathFinderOwnership"});
-  // 设置TokenSwap参数
-  m.call(TokenSwap, "setMaxHops", [4], {id: "setMaxHops", after: [call1]});
-  m.call(TokenSwap, "setTargetToken", [usdcAddress], {id: "setTargetToken", after: [call1]});
+  m.call(PathFinderModule.PathFinder, "transferOwnership", [TokenSwap], {id: "transferPathFinderOwnership"});
+  // // 设置TokenSwap参数
+  // m.call(TokenSwap, "setMaxHops", [4], {id: "setMaxHops", after: [call1]});
+  // m.call(TokenSwap, "setTargetToken", [usdtAddress], {id: "setTargetToken", after: [call1]});
 
   
   return { TokenSwap };

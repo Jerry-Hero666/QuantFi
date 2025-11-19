@@ -5,6 +5,7 @@ import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../MockERC20.sol";
+import "hardhat/console.sol";
 
 contract MockUniswapV3SwapRouter is ISwapRouter {
     using SafeERC20 for IERC20;
@@ -107,15 +108,10 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
         
         // 计算输出金额
         amountOut = getAmountOut(amountIn, path);
-        
+        console.log("MockUniswapV3SwapRouter exactInput amountOut:", amountOut);
         // 转移输出代币
         address tokenOut = path[path.length - 1];
-        if (tokenOut == WETH9) {
-            (bool success, ) = payable(params.recipient).call{value: amountOut}("");
-            require(success, "ETH transfer failed");
-        } else {
-            IERC20(tokenOut).safeTransfer(params.recipient, amountOut);
-        }
+        IERC20(tokenOut).safeTransfer(params.recipient, amountOut);
     }
 
     function exactOutputSingle(

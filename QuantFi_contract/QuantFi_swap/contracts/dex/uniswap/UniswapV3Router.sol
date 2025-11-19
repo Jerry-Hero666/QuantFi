@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
@@ -10,7 +9,6 @@ import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
 
 interface WETH9Token {
     function deposit() external payable;
@@ -43,6 +41,8 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
     // 事件
     event SwapTokensForTokens(uint256 amountIn, uint256 amountOut, address to);
     event SetFeeTier(address tokenA, address tokenB, uint24 fee);
+    event AddExchangeableToken(address token);
+    event RemoveExchangeableToken(address token);
 
     constructor(
         address _swapRouter,
@@ -63,13 +63,58 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         WETH9 = WETH9Token(_WETH9);
         exchangeableTokens = _exchangeableTokens;
     }
+
+    /**
+     * @dev 添加可交换的代币
+     * @param token 代币地址
+     */
+    function addExchangeableToken(address token) public onlyOwner {
+        require(token != address(0), "UniswapV3Router: INVALID_TOKEN");
+        bool exists = false;
+        for (uint256 i = 0; i < exchangeableTokens.length; i++) {
+            if (exchangeableTokens[i] == token) {
+                exists = true;
+                break;
+            }
+        }
+        require(!exists, "UniswapV3Router: TOKEN_ALREADY_EXIST");
+        exchangeableTokens.push(token);
+        emit AddExchangeableToken(token);
+    }
+
+    /**
+     * @dev 移除可交换的代币
+     * @param token 代币地址
+     */
+    function removeExchangeableToken(address token) public onlyOwner {
+        uint256 length = exchangeableTokens.length; // 获取数组长度
+        for (uint256 i = 0; i < length; i++) {
+            if (exchangeableTokens[i] == token) {
+                // 将最后一个元素移动到当前位置
+                exchangeableTokens[i] = exchangeableTokens[length - 1];
+                // 删除最后一个元素
+                exchangeableTokens.pop();
+                emit RemoveExchangeableToken(token);
+                break;
+            }
+        }
+    }
+
+    function getAllExchangeableTokens() public view returns (address[] memory) {
+        return exchangeableTokens;
+    }
+
     /**
      * @dev 设置代币对的费用层级
      * @param tokenA 代币A地址
      * @param tokenB 代币B地址
      * @param fee 费用层级 500, 3000, 10000
      */
-    function setFeeTier(address tokenA, address tokenB, uint24 fee) public onlyOwner {
+    function setFeeTier(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) public onlyOwner {
         address poolAddress = factory.getPool(tokenA, tokenB, fee);
         require(poolAddress != address(0), "UniswapV3Router: POOL_NOT_EXIST");
         feeTiers[tokenA][tokenB] = fee;
@@ -102,12 +147,12 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
             // 将代币转入本合约
             IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
         }
-        
+
         // 批准路由器使用代币
         IERC20(tokenIn).approve(address(swapRouter), amountIn);
         // 设置交换参数
-        ISwapRouter.ExactInputParams memory params =
-            ISwapRouter.ExactInputParams({
+        ISwapRouter.ExactInputParams memory params = ISwapRouter
+            .ExactInputParams({
                 path: swapPath.pathBytes,
                 recipient: to,
                 deadline: deadline,
@@ -126,9 +171,9 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
      * 返回给定输入数量的最优输出数量、路径
      */
     function getAmountsOut(
-        address tokenIn, 
-        uint256 amountIn, 
-        address tokenOut, 
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
         uint8 maxHops
     ) external override returns (Model.SwapPath memory swapPath) {
         if (tokenIn == address(0)) {
@@ -144,20 +189,31 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         address[] memory directExchange = new address[](2);
         directExchange[0] = tokenIn;
         directExchange[1] = tokenOut;
-        pathRecord[resultIndex++] = directExchange;
-        
+        pathRecord[resultIndex] = directExchange;
+
+        uint24 fee = feeTiers[tokenIn][tokenOut];
+        // require(fee != 0, "UniswapV3Router: NO_FEE_TIER_SET");
+        if (fee != 0) {
+            bytes memory path = abi.encodePacked(tokenIn, fee, tokenOut);
+            (uint256 amountOut, , , ) = getAmountOutMulti(path, swapPath.inputAmount);
+            swapPath.outputAmount = amountOut;
+            swapPath.pathBytes = path;
+            swapPath.path = pathRecord[resultIndex];
+        }
+        resultIndex++;
+
         for (uint256 length = 2; length <= maxHops; length++) {
             if (exchangeableTokens.length < length - 1) continue; // 没有足够的元素
-            
+
             uint256[] memory used = new uint256[](exchangeableTokens.length);
             address[] memory combination = new address[](length + 1);
             combination[0] = tokenIn;
             resultIndex = _generatePermutations(
                 tokenIn,
-                combination, 
+                combination,
                 1,
-                used, 
-                pathRecord, 
+                used,
+                pathRecord,
                 resultIndex,
                 tokenOut,
                 swapPath
@@ -168,51 +224,75 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
 
     // 查询币对价格
     function getAmountOutSingle(
-        address tokenIn, 
-        address tokenOut, 
-        uint24 fee, 
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
         uint256 amountIn,
         uint160 sqrtPriceLimitX96
-    ) public returns (uint256 ,uint160 ,uint32 ,uint256 ){
-        try quoter.quoteExactInputSingle(IQuoterV2.QuoteExactInputSingleParams({
-            tokenIn: tokenIn,
-            tokenOut: tokenOut,
-            amountIn: amountIn,
-            fee: fee,
-            sqrtPriceLimitX96: sqrtPriceLimitX96
-        })) returns (uint256 amountOut,uint160 sqrtPriceX96After,uint32 initializedTicksCrossed,uint256 gasEstimate) {
-                return (amountOut,sqrtPriceX96After,initializedTicksCrossed,gasEstimate);
-            } catch {
-                // 如果查询失败，返回零
-                return (0,0,0,0);
-            }
+    ) public returns (uint256, uint160, uint32, uint256) {
+        try
+            quoter.quoteExactInputSingle(
+                IQuoterV2.QuoteExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    amountIn: amountIn,
+                    fee: fee,
+                    sqrtPriceLimitX96: sqrtPriceLimitX96
+                })
+            )
+        returns (
+            uint256 amountOut,
+            uint160 sqrtPriceX96After,
+            uint32 initializedTicksCrossed,
+            uint256 gasEstimate
+        ) {
+            return (
+                amountOut,
+                sqrtPriceX96After,
+                initializedTicksCrossed,
+                gasEstimate
+            );
+        } catch {
+            // 如果查询失败，返回零
+            return (0, 0, 0, 0);
+        }
     }
 
     // 查询多币对价格
     function getAmountOutMulti(
-        bytes memory path, 
+        bytes memory path,
         uint256 amountIn
-    ) public returns (uint256 ,uint160[] memory,uint32[] memory,uint256 ){
-        try quoter.quoteExactInput(path, amountIn) returns (uint256 amountOut,uint160[] memory sqrtPriceX96AfterList,uint32[] memory initializedTicksCrossedList,uint256 gasEstimate) {
-                return (amountOut,sqrtPriceX96AfterList,initializedTicksCrossedList,gasEstimate);
-            } catch {
-                // 如果查询失败，返回零
-                return (0,new uint160[](0),new uint32[](0),0);
-            }
+    ) public returns (uint256, uint160[] memory, uint32[] memory, uint256) {
+        try quoter.quoteExactInput(path, amountIn) returns (
+            uint256 amountOut,
+            uint160[] memory sqrtPriceX96AfterList,
+            uint32[] memory initializedTicksCrossedList,
+            uint256 gasEstimate
+        ) {
+            return (
+                amountOut,
+                sqrtPriceX96AfterList,
+                initializedTicksCrossedList,
+                gasEstimate
+            );
+        } catch {
+            // 如果查询失败，返回零
+            return (0, new uint160[](0), new uint32[](0), 0);
+        }
     }
 
     // 计算组合总数
     function _calculateTotalCombinations(uint256 n) private pure returns (uint256) {
         if (n == 0) return 1; // 只有长度为1的组合
-        
+
         uint256 total = 1; // 长度为1
-        uint256 currentPermutation = 1; 
-    
+        uint256 currentPermutation = 1;
+
         for (uint256 k = 1; k <= n; k++) {
             currentPermutation *= (n - (k - 1));
             total += currentPermutation;
         }
-        
+
         return total;
     }
 
@@ -236,13 +316,17 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
                 pathRecord[resultIndex][i] = combination[i];
                 if (i > 0) {
                     uint24 fee = feeTiers[combination[i - 1]][combination[i]];
+                    if (fee == 0) {
+                        return resultIndex + 1;
+                    }
+                    // require(fee != 0, "UniswapV3Router: NO_FEE_TIER_SET");
                     path = bytes.concat(path, abi.encodePacked(uint24(fee), combination[i]));
-                } else{
+                } else {
                     path = bytes.concat(path, abi.encodePacked(combination[i]));
                 }
             }
-            
-            (uint256 amountOut,,,) = getAmountOutMulti(path, swapPath.inputAmount);
+
+            (uint256 amountOut, , , ) = getAmountOutMulti(path, swapPath.inputAmount);
             if (amountOut > swapPath.outputAmount) {
                 swapPath.outputAmount = amountOut;
                 swapPath.path = pathRecord[resultIndex];
@@ -251,37 +335,36 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
 
             return resultIndex + 1;
         }
-        
+
         // 遍历所有元素
         for (uint256 i = 0; i < exchangeableTokens.length; i++) {
             // 跳过tokenIn和已使用的元素
             if (exchangeableTokens[i] == tokenIn || used[i] > 0) continue;
-            
+
             // 标记为已使用
             used[i] = 1;
-            
+
             // 添加到组合
             combination[depth] = exchangeableTokens[i];
-            
+
             // 递归生成下一层
             resultIndex = _generatePermutations(
                 tokenIn,
-                combination, 
+                combination,
                 depth + 1,
-                used, 
+                used,
                 pathRecord,
                 resultIndex,
                 tokenOut,
                 swapPath
             );
-            
+
             // 回溯
             used[i] = 0;
         }
-        
+
         return resultIndex;
     }
-
 
     /**
      * @dev 实现IDexRouter.dexName
@@ -290,5 +373,4 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
     function dexName() external pure override returns (string memory) {
         return "UniswapV3";
     }
-
 }
