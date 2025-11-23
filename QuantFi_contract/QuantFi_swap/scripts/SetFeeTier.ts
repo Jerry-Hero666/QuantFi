@@ -4,16 +4,16 @@ import { network } from "hardhat";
 const { ethers } = await network.connect();
 
 
-const uniswapV3RouterAddress = "0x4917E5BA809F8eA2D02a16707b5b68284285DC6d";
+const uniswapV3RouterAddress = "0x333839F88F1Dd8D85a4A287C57f8F61115221c94";
 
 
 const tokenAddrOnSepolia = {
-  UNI: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
-  AAVE: "0x88541670E55cC00bEEFD87eB59EDd1b7C511AC9a",
-  LINK: "0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5",
-  WETH9: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
-  USDT: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0",
-}
+  WETH9: process.env.SEPOLIA_TOKEN_WETH9 || "",
+  AAVE: process.env.SEPOLIA_TOKEN_AAVE || "",
+  LINK: process.env.SEPOLIA_TOKEN_LINK || "",
+  UNI: process.env.SEPOLIA_TOKEN_UNI || "",
+  USDT: process.env.SEPOLIA_TOKEN_USDT || ""
+};
 
 async function main() {
 

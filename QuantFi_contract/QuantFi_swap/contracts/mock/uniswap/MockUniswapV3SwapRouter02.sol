@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import '../../dex/uniswap/interface/ISwapRouter02.sol';
+import '@uniswap/swap-router-contracts/contracts/interfaces/IV3SwapRouter.sol';
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../MockERC20.sol";
 import "hardhat/console.sol";
 
-contract MockUniswapV3SwapRouter is ISwapRouter {
+contract MockUniswapV3SwapRouter02 is ISwapRouter02 {
     using SafeERC20 for IERC20;
 
     address public factory;
@@ -29,9 +30,6 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
     // 获取模拟价格
     function getMockPrice(address tokenIn, address tokenOut) public view returns (uint256) {
         uint256 price = mockPrices[tokenIn][tokenOut];
-        // if (price == 0) {
-        //     return 1e18; // 默认1:1
-        // }
         return price;
     }
 
@@ -53,21 +51,15 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
         }
     }
 
-    // 实现ISwapRouter接口的函数
+    // 实现IV3SwapRouter接口的函数
     function exactInputSingle(
-        ISwapRouter.ExactInputSingleParams calldata params
+        IV3SwapRouter.ExactInputSingleParams calldata params
     ) external override payable returns (uint256 amountOut) {
-        require(params.deadline >= block.timestamp, "Transaction too old");
-        
         address[] memory path = new address[](2);
         path[0] = params.tokenIn;
         path[1] = params.tokenOut;
         
-        // // 转移输入代币
-        // if (params.tokenIn == WETH9 && msg.value > 0) {
-        //     // 处理WETH情况
-        // } else {
-        // }
+        // 转移输入代币
         IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
         
         // 计算输出金额
@@ -75,7 +67,7 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
         
         // 转移输出代币
         if (params.tokenOut == WETH9) {
-            (bool success, ) = payable(msg.sender).call{value: amountOut}("");
+            (bool success, ) = payable(params.recipient).call{value: amountOut}("");
             require(success, "ETH transfer failed");
         } else {
             IERC20(params.tokenOut).safeTransfer(params.recipient, amountOut);
@@ -89,21 +81,15 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
     }
 
     function exactInput(
-        ISwapRouter.ExactInputParams calldata params
+        IV3SwapRouter.ExactInputParams calldata params
     ) external override payable returns (uint256 amountOut) {
-        require(params.deadline >= block.timestamp, "Transaction too old");
-        
         // 解析路径
         (address[] memory path, ) = decodePath(params.path);
         
         // 转移输入代币
         address tokenIn = path[0];
         uint256 amountIn = params.amountIn; // 初始输入金额
-        // if (tokenIn == WETH9 && msg.value > 0) {
-        //     // 处理WETH情况
-        //     require(msg.value > 0, "Insufficient ETH sent");
-        //     amountIn = msg.value;
-        // }
+
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         
         // 计算输出金额
@@ -114,10 +100,8 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
     }
 
     function exactOutputSingle(
-        ISwapRouter.ExactOutputSingleParams calldata params
+        IV3SwapRouter.ExactOutputSingleParams calldata params
     ) external override payable returns (uint256 amountIn) {
-        require(params.deadline >= block.timestamp, "Transaction too old");
-        
         // 反向计算输入金额
         uint256 price = getMockPrice(params.tokenIn, params.tokenOut);
         // 考虑滑点和手续费，需要更多的输入
@@ -154,10 +138,8 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
     }
 
     function exactOutput(
-        ISwapRouter.ExactOutputParams calldata params
+        IV3SwapRouter.ExactOutputParams calldata params
     ) external override payable returns (uint256 amountIn) {
-        require(params.deadline >= block.timestamp, "Transaction too old");
-        
         // 解析路径
         (address[] memory path, ) = decodePath(params.path);
         
@@ -220,11 +202,9 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
             uint256 addressOffset = feeOffset + 3;
             // 提取地址
             tokens[i + 1] = readAddress(path, addressOffset);
-
         }
         
         return (tokens, fees);
-
     }
 
     /**
@@ -234,13 +214,10 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
      * @return 读取的地址
      */
     function readAddress(bytes memory path, uint256 offset) private pure returns (address) {
-        // 确保偏移量不会导致越界访问
         require(offset + 20 <= path.length, "Address read out of bounds");
         
         address addr;
         assembly {
-            // 从path中读取ADDRESS_SIZE长度的字节，并转换为地址
-            // 由于address是20字节，而calldataload读取32字节，我们需要清除高12字节
             addr := shr(96, mload(add(add(path, 32), offset)))
         }
         return addr;
@@ -253,14 +230,10 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
      * @return 读取的费用（uint24类型）
      */
     function readFee(bytes memory path, uint256 offset) private pure returns (uint24) {
-        // 确保偏移量不会导致越界访问
         require(offset + 3 <= path.length, "Fee read out of bounds");
         
         uint24 fee;
         assembly {
-            // 从path中读取FEE_SIZE长度的字节，并转换为uint24
-            // 由于calldataload读取32字节，我们需要将读取的值右移232位（29字节）以获取低3字节
-            // 然后用0xFFFFFF掩码确保只保留低3字节
             fee := and(shr(232, mload(add(add(path, 32), offset))), 0xFFFFFF)
         }
         return fee;
@@ -273,9 +246,158 @@ contract MockUniswapV3SwapRouter is ISwapRouter {
         bytes calldata data
     ) external override {
         // 在模拟环境中，我们不需要实际的流动性池交互
-        // 这个函数在真实实现中会处理代币的转移
-        // 由于这是一个模拟合约，我们只需要确保接口一致性
     }
+
+    // IV2SwapRouter 方法（简单实现）
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to
+    ) external payable override returns (uint256 amountOut) {
+        // 简单实现，复用V3逻辑
+        address[] memory pathMemory = new address[](path.length);
+        for (uint i = 0; i < path.length; i++) {
+            pathMemory[i] = path[i];
+        }
+        
+        IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountIn);
+        amountOut = getAmountOut(amountIn, pathMemory);
+        require(amountOut >= amountOutMin, "Insufficient output amount");
+        IERC20(path[path.length - 1]).safeTransfer(to, amountOut);
+    }
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to
+    ) external payable override returns (uint256 amountIn) {
+        // 反向计算输入金额
+        address[] memory pathMemory = new address[](path.length);
+        for (uint i = 0; i < path.length; i++) {
+            pathMemory[i] = path[i];
+        }
+        
+        uint256 tempAmount = amountOut;
+        for (uint i = pathMemory.length - 1; i > 0; i--) {
+            address currentTokenIn = pathMemory[i - 1];
+            address currentTokenOut = pathMemory[i];
+            uint256 price = getMockPrice(currentTokenIn, currentTokenOut);
+            tempAmount = (tempAmount * 10**MockERC20(currentTokenIn).decimals() * 1003) / (price * 997);
+        }
+        
+        amountIn = tempAmount;
+        require(amountIn <= amountInMax, "Too much input needed");
+        
+        // 转移输入代币（先转移最大金额）
+        IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountInMax);
+        
+        // 转移输出代币
+        IERC20(path[path.length - 1]).safeTransfer(to, amountOut);
+        
+        // 退还多余的输入代币
+        if (amountInMax > amountIn) {
+            uint256 refundAmount = amountInMax - amountIn;
+            if (refundAmount > 0) {
+                IERC20(path[0]).safeTransfer(msg.sender, refundAmount);
+            }
+        }
+    }
+
+    // IMulticallExtended 方法
+    function multicall(uint256 deadline, bytes[] calldata data) external payable override returns (bytes[] memory results) {
+        require(deadline >= block.timestamp, "Transaction too old");
+        results = new bytes[](data.length);
+        for (uint i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+            require(success, "Multicall failed");
+            results[i] = result;
+        }
+    }
+
+    function multicall(bytes[] calldata data) external payable override returns (bytes[] memory results) {
+        results = new bytes[](data.length);
+        for (uint i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+            require(success, "Multicall failed");
+            results[i] = result;
+        }
+    }
+
+    function multicall(bytes32 previousBlockhash, bytes[] calldata data)
+        external
+        payable
+        override
+        returns (bytes[] memory results)
+    {
+        require(blockhash(block.number - 1) == previousBlockhash, "Invalid blockhash");
+        results = new bytes[](data.length);
+        for (uint i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+            require(success, "Multicall failed");
+            results[i] = result;
+        }
+    }
+
+    // IApproveAndCall 方法（简单实现，留空）
+    function getApprovalType(address, uint256) external pure override returns (IApproveAndCall.ApprovalType) {
+        return IApproveAndCall.ApprovalType.NOT_REQUIRED;
+    }
+
+    function approveMax(address) external payable override {}
+    function approveMaxMinusOne(address) external payable override {}
+    function approveZeroThenMax(address) external payable override {}
+    function approveZeroThenMaxMinusOne(address) external payable override {}
+    
+    function callPositionManager(bytes memory) external payable override returns (bytes memory) {
+        return "";
+    }
+
+    function mint(IApproveAndCall.MintParams calldata) external payable override returns (bytes memory) {
+        return "";
+    }
+
+    function increaseLiquidity(IApproveAndCall.IncreaseLiquidityParams calldata) external payable override returns (bytes memory) {
+        return "";
+    }
+
+    // ISelfPermit 方法（简单实现，留空）
+    function selfPermit(
+        address,
+        uint256,
+        uint256,
+        uint8,
+        bytes32,
+        bytes32
+    ) external payable override {}
+
+    function selfPermitIfNecessary(
+        address,
+        uint256,
+        uint256,
+        uint8,
+        bytes32,
+        bytes32
+    ) external payable override {}
+
+    function selfPermitAllowed(
+        address,
+        uint256,
+        uint256,
+        uint8,
+        bytes32,
+        bytes32
+    ) external payable override {}
+
+    function selfPermitAllowedIfNecessary(
+        address,
+        uint256,
+        uint256,
+        uint8,
+        bytes32,
+        bytes32
+    ) external payable override {}
     
     // 支持接收ETH
     receive() external payable {}

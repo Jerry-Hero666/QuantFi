@@ -1,5 +1,4 @@
 {
-  "PathFinderModule#PathFinder": "0xd50Ba962E7d2B043797566a3d91Ff6B44Cb68c6E",
-  "TokenSwapModule#TokenSwap": "0x70314b0E68f13DCB1D427F74Fecc41A88dDE9E52",
-  "UniswapV3RouterModule#UniswapV3Router": "0x4917E5BA809F8eA2D02a16707b5b68284285DC6d"
+  "TokenSwapModule#TokenSwap": "0x1bfd782183eBBC880FB896a514dFaC1EE2E6A18e",
+  "UniswapV3RouterModule#UniswapV3Router": "0x333839F88F1Dd8D85a4A287C57f8F61115221c94"
 }

@@ -32,15 +32,12 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
 
     WETH9Token public immutable WETH9;
 
-    // 支持交换的tokens
-    address[] public exchangeableTokens;
-
     // 支持的费用层级 (代币对 => 对应的池信息)
     mapping(address token0 => mapping(address token1 => uint24 fee)) public feeTiers;
 
  
     // 事件
-    event SwapTokensForTokens(uint256 amountIn, uint256 amountOut, address to);
+    event SwapTokensForTokens(uint256 amountIn, address inputToken, uint256 amountOut, address to);
     event SetFeeTier(address tokenA, address tokenB, uint24 fee);
     event AddExchangeableToken(address token);
     event RemoveExchangeableToken(address token);
@@ -50,10 +47,8 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         address _quoter,
         address _factory,
         address _owner,
-        address _WETH9,
-        address[] memory _exchangeableTokens
+        address _WETH9
     ) Ownable(_owner) {
-        require(_exchangeableTokens.length > 1, "UniswapV3Router: INVALID_TOKENS_LENGTH");
         require(_swapRouter != address(0), "UniswapV3Router: INVALID_ROUTER");
         require(_quoter != address(0), "UniswapV3Router: INVALID_QUOTER");
         require(_factory != address(0), "UniswapV3Router: INVALID_FACTORY");
@@ -62,48 +57,9 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         swapRouter = ISwapRouter02(_swapRouter);
         factory = IUniswapV3Factory(_factory);
         WETH9 = WETH9Token(_WETH9);
-        exchangeableTokens = _exchangeableTokens;
     }
 
-    /**
-     * @dev 添加可交换的代币
-     * @param token 代币地址
-     */
-    function addExchangeableToken(address token) public onlyOwner {
-        require(token != address(0), "UniswapV3Router: INVALID_TOKEN");
-        bool exists = false;
-        for (uint256 i = 0; i < exchangeableTokens.length; i++) {
-            if (exchangeableTokens[i] == token) {
-                exists = true;
-                break;
-            }
-        }
-        require(!exists, "UniswapV3Router: TOKEN_ALREADY_EXIST");
-        exchangeableTokens.push(token);
-        emit AddExchangeableToken(token);
-    }
-
-    /**
-     * @dev 移除可交换的代币
-     * @param token 代币地址
-     */
-    function removeExchangeableToken(address token) public onlyOwner {
-        uint256 length = exchangeableTokens.length; // 获取数组长度
-        for (uint256 i = 0; i < length; i++) {
-            if (exchangeableTokens[i] == token) {
-                // 将最后一个元素移动到当前位置
-                exchangeableTokens[i] = exchangeableTokens[length - 1];
-                // 删除最后一个元素
-                exchangeableTokens.pop();
-                emit RemoveExchangeableToken(token);
-                break;
-            }
-        }
-    }
-
-    function getAllExchangeableTokens() public view returns (address[] memory) {
-        return exchangeableTokens;
-    }
+    
 
     /**
      * @dev 设置代币对的费用层级
@@ -125,44 +81,45 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
 
     /**
      * @dev 实现IDexRouter.swapTokensForTokens
-     * 根据给定路径将精确数量的输入代币交换为输出代币
+     * 根据给定路径将输入代币交换为输出代币
      */
     function swapTokensForTokens(
         Model.SwapPath memory swapPath,
-        address tokenIn,
-        uint256 amountIn,
+        address recipient,
         uint256 amountOutMin,
-        address to,
         uint256 deadline
     ) external payable override nonReentrant returns (uint256) {
         require(deadline >= block.timestamp, "UniswapV3Router: EXPIRED");
         require(swapPath.path.length >= 2, "UniswapV3Router: INVALID_PATH");
+        require(swapPath.path.length - 1 == swapPath.fees.length, "UniswapV3Router: INVALID_FEE_TIRES");
+        require(recipient != address(0), "UniswapV3Router: INVALID_RECIPIENT");
 
-        if (tokenIn == address(0) || tokenIn == address(WETH9)) {
-            require(msg.value > 0, "UniswapV3Router: INSUFFICIENT_ETH_SENT");
-            // ETH 转 WETH
-            WETH9.deposit{value: msg.value}();
-            amountIn = msg.value;
-            tokenIn = address(WETH9);
+        if (swapPath.inputToken == address(0)) {
+            uint256 msgValue = msg.value;
+            require(msgValue > 0, "UniswapV3Router: INSUFFICIENT_ETH_SENT");
+            WETH9.deposit{value: msgValue}();
+            swapPath.inputAmount = msgValue;
+            swapPath.inputToken = address(WETH9);
         } else {
+            require(swapPath.inputAmount > 0, "UniswapV3Router: INSUFFICIENT_INPUT_AMOUNT");
             // 将代币转入本合约
-            IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(swapPath.inputToken).transferFrom(msg.sender, address(this), swapPath.inputAmount);
         }
 
         // 批准路由器使用代币
-        IERC20(tokenIn).approve(address(swapRouter), amountIn);
+        IERC20(swapPath.inputToken).approve(address(swapRouter), swapPath.inputAmount);
         // 设置交换参数
         IV3SwapRouter.ExactInputParams memory params = IV3SwapRouter
             .ExactInputParams({
                 path: swapPath.pathBytes,
-                recipient: to,
-                amountIn: amountIn,
+                recipient: recipient,
+                amountIn: swapPath.inputAmount,
                 amountOutMinimum: amountOutMin
             });
 
         // 执行交换
         uint256 amountOut = swapRouter.exactInput(params);
-        emit SwapTokensForTokens(amountIn, amountOut, to);
+        emit SwapTokensForTokens(params.amountIn, swapPath.inputToken, amountOut, params.recipient);
         return amountOut;
     }
 
@@ -174,38 +131,38 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         address tokenIn,
         uint256 amountIn,
         address tokenOut,
-        uint8 maxHops
+        uint8 maxHops,
+        address[] memory supportedTokens
     ) external override returns (Model.SwapPath memory swapPath) {
         if (tokenIn == address(0)) {
             tokenIn = address(WETH9);
         }
         swapPath.inputAmount = amountIn;
         swapPath.dexRouter = address(this);
-        // 所有路径组合
-        uint256 totalCombinations = _calculateTotalCombinations(exchangeableTokens.length - 1);
-        address[][] memory pathRecord = new address[][](totalCombinations);
 
         uint256 resultIndex = 0;
         address[] memory directExchange = new address[](2);
         directExchange[0] = tokenIn;
         directExchange[1] = tokenOut;
-        pathRecord[resultIndex] = directExchange;
 
         uint24 fee = feeTiers[tokenIn][tokenOut];
-        // require(fee != 0, "UniswapV3Router: NO_FEE_TIER_SET");
         if (fee != 0) {
             bytes memory path = abi.encodePacked(tokenIn, fee, tokenOut);
-            (uint256 amountOut, , , ) = getAmountOutMulti(path, swapPath.inputAmount);
+            (uint256 amountOut, , , uint256 gasEstimate) = getAmountOutMulti(path, swapPath.inputAmount);
             swapPath.outputAmount = amountOut;
+            swapPath.gasEstimate = gasEstimate;
             swapPath.pathBytes = path;
-            swapPath.path = pathRecord[resultIndex];
+            swapPath.path = directExchange;
+            uint24[] memory fees = new uint24[](1);
+            fees[0] = fee;
+            swapPath.fees = fees;
         }
         resultIndex++;
 
         for (uint256 length = 2; length <= maxHops; length++) {
-            if (exchangeableTokens.length < length - 1) continue; // 没有足够的元素
+            if (supportedTokens.length < length - 1) continue; // 没有足够的元素
 
-            uint256[] memory used = new uint256[](exchangeableTokens.length);
+            uint256[] memory used = new uint256[](supportedTokens.length);
             address[] memory combination = new address[](length + 1);
             combination[0] = tokenIn;
             resultIndex = _generatePermutations(
@@ -213,10 +170,10 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
                 combination,
                 1,
                 used,
-                pathRecord,
                 resultIndex,
                 tokenOut,
-                swapPath
+                swapPath,
+                supportedTokens
             );
         }
         return swapPath;
@@ -281,20 +238,7 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         }
     }
 
-    // 计算组合总数
-    function _calculateTotalCombinations(uint256 n) private pure returns (uint256) {
-        if (n == 0) return 1; // 只有长度为1的组合
-
-        uint256 total = 1; // 长度为1
-        uint256 currentPermutation = 1;
-
-        for (uint256 k = 1; k <= n; k++) {
-            currentPermutation *= (n - (k - 1));
-            total += currentPermutation;
-        }
-
-        return total;
-    }
+ 
 
     // 递归生成排列
     function _generatePermutations(
@@ -302,50 +246,53 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
         address[] memory combination,
         uint256 depth,
         uint256[] memory used,
-        address[][] memory pathRecord,
         uint256 resultIndex,
         address tokenOut,
-        Model.SwapPath memory swapPath
+        Model.SwapPath memory swapPath,
+        address[] memory supportedTokens
     ) private returns (uint256) {
         // 达到目标长度，保存组合
         if (depth == combination.length - 1) {
             combination[depth] = tokenOut;
-            pathRecord[resultIndex] = new address[](combination.length);
+            address[] memory exchangeRecord = new address[](combination.length);
+            uint24[] memory fees = new uint24[](combination.length - 1);
             bytes memory path = new bytes(0);
             for (uint256 i = 0; i < combination.length; i++) {
-                pathRecord[resultIndex][i] = combination[i];
+                exchangeRecord[i] = combination[i];
                 if (i > 0) {
                     uint24 fee = feeTiers[combination[i - 1]][combination[i]];
                     if (fee == 0) {
                         return resultIndex + 1;
                     }
-                    // require(fee != 0, "UniswapV3Router: NO_FEE_TIER_SET");
+                    fees[i - 1] = fee;
                     path = bytes.concat(path, abi.encodePacked(uint24(fee), combination[i]));
                 } else {
                     path = bytes.concat(path, abi.encodePacked(combination[i]));
                 }
             }
 
-            (uint256 amountOut, , , ) = getAmountOutMulti(path, swapPath.inputAmount);
+            (uint256 amountOut, , , uint256 gasEstimate) = getAmountOutMulti(path, swapPath.inputAmount);
             if (amountOut > swapPath.outputAmount) {
                 swapPath.outputAmount = amountOut;
-                swapPath.path = pathRecord[resultIndex];
+                swapPath.gasEstimate = gasEstimate;
+                swapPath.path = exchangeRecord;
                 swapPath.pathBytes = path;
+                swapPath.fees = fees;
             }
 
             return resultIndex + 1;
         }
 
         // 遍历所有元素
-        for (uint256 i = 0; i < exchangeableTokens.length; i++) {
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
             // 跳过tokenIn和已使用的元素
-            if (exchangeableTokens[i] == tokenIn || used[i] > 0) continue;
+            if (supportedTokens[i] == tokenIn || used[i] > 0) continue;
 
             // 标记为已使用
             used[i] = 1;
 
             // 添加到组合
-            combination[depth] = exchangeableTokens[i];
+            combination[depth] = supportedTokens[i];
 
             // 递归生成下一层
             resultIndex = _generatePermutations(
@@ -353,10 +300,10 @@ contract UniswapV3Router is IDexRouter, Ownable, ReentrancyGuard {
                 combination,
                 depth + 1,
                 used,
-                pathRecord,
                 resultIndex,
                 tokenOut,
-                swapPath
+                swapPath,
+                supportedTokens
             );
 
             // 回溯

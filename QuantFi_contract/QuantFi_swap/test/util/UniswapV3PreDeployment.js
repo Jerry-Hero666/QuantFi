@@ -79,7 +79,7 @@ export async function deployUniswapV3Mocks(ethers) {
     await quoter.waitForDeployment();
 
     // 部署SwapRouter，使用ETH作为WETH9
-    const SwapRouter = await ethers.getContractFactory("MockUniswapV3SwapRouter");
+    const SwapRouter = await ethers.getContractFactory("MockUniswapV3SwapRouter02");
     let swapRouter = await SwapRouter.connect(owner).deploy(
         await factory.getAddress(),
         await tokens.ETH.getAddress()
