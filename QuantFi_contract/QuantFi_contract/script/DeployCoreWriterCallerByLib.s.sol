@@ -11,8 +11,8 @@ contract DeployCoreWriterCallerByLib is Script {
         vm.startBroadcast();
 
         // 部署 PriceOracleReader 合约
-        BridgingExample bridgeContract = new BridgingExample();
-        TradingExample tradingContract = new TradingExample();
+        Bridging bridgeContract = new Bridging();
+        Trading tradingContract = new Trading();
         console.log("BridgingExample deployed at:", address(bridgeContract));
         console.log("TradingExample deployed at:", address(tradingContract));
 

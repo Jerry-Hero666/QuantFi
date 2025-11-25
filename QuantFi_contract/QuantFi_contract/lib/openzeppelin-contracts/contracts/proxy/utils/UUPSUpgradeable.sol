@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts (last updated v5.5.0) (proxy/utils/UUPSUpgradeable.sol)
+// OpenZeppelin Contracts (last updated v5.3.0) (proxy/utils/UUPSUpgradeable.sol)
 
 pragma solidity ^0.8.22;
 
-import {IERC1822Proxiable} from "../../interfaces/draft-IERC1822.sol";
-import {ERC1967Utils} from "../ERC1967/ERC1967Utils.sol";
+import {IERC1822Proxiable} from "@openzeppelin/contracts/interfaces/draft-IERC1822.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Initializable} from "./Initializable.sol";
 
 /**
  * @dev An upgradeability mechanism designed for UUPS proxies. The functions included here can perform an upgrade of an
@@ -15,10 +16,8 @@ import {ERC1967Utils} from "../ERC1967/ERC1967Utils.sol";
  * `UUPSUpgradeable` with a custom implementation of upgrades.
  *
  * The {_authorizeUpgrade} function must be overridden to include access restriction to the upgrade mechanism.
- *
- * @custom:stateless
  */
-abstract contract UUPSUpgradeable is IERC1822Proxiable {
+abstract contract UUPSUpgradeable is Initializable, IERC1822Proxiable {
     /// @custom:oz-upgrades-unsafe-allow state-variable-immutable
     address private immutable __self = address(this);
 
@@ -63,6 +62,9 @@ abstract contract UUPSUpgradeable is IERC1822Proxiable {
         _;
     }
 
+    function __UUPSUpgradeable_init() internal onlyInitializing {}
+
+    function __UUPSUpgradeable_init_unchained() internal onlyInitializing {}
     /**
      * @dev Implementation of the ERC-1822 {proxiableUUID} function. This returns the storage slot used by the
      * implementation. It is used to validate the implementation's compatibility when performing an upgrade.
@@ -71,7 +73,7 @@ abstract contract UUPSUpgradeable is IERC1822Proxiable {
      * bricking a proxy that upgrades to it, by delegating to itself until out of gas. Thus it is critical that this
      * function revert if invoked through a proxy. This is guaranteed by the `notDelegated` modifier.
      */
-    function proxiableUUID() external view notDelegated returns (bytes32) {
+    function proxiableUUID() external view virtual notDelegated returns (bytes32) {
         return ERC1967Utils.IMPLEMENTATION_SLOT;
     }
 
