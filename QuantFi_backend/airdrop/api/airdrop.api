@@ -1,0 +1,116 @@
+syntax = "v1"
+
+type BaseResp {
+	code int64  `json:"code"`
+	msg  string `json:"msg"`
+}
+
+type LoginRequest {
+	wallet    string `json:"wallet"`
+	signature string `json:"signature"`
+	timestamp int64  `json:"timestamp"`
+}
+
+type LoginData {
+	accessToken string `json:"accessToken"`
+	expiresAt   int64  `json:"expiresAt"`
+	loginDays   int64  `json:"loginDays"`
+	points      int64  `json:"points"`
+}
+
+type LoginResponse {
+	BaseResp
+	data LoginData `json:"data"`
+}
+
+type StartRoundRequest {
+	roundName     string `json:"roundName"`
+	merkleRoot    string `json:"merkleRoot"`
+	tokenAddress  string `json:"tokenAddress"`
+	claimDeadline int64  `json:"claimDeadline"`
+}
+
+type RoundInfoRequest {
+	roundId   uint64 `json:"currentRoundId"`
+	roundName string `json:"roundName"`
+}
+
+type RoundInfoData {
+	currentRoundId int64  `json:"currentRoundId"`
+	roundName      string `json:"roundName"`
+	claimDeadline  int64  `json:"claimDeadline"`
+	merkleRoot     string `json:"merkleRoot"`
+	tokenAddress   string `json:"tokenAddress"`
+	totalPoints    int64  `json:"totalPoints"`
+}
+
+type RoundInfoResponse {
+	BaseResp
+	data RoundInfoData `json:"data"`
+}
+
+type PointsData {
+	wallet      string `json:"wallet"`
+	available   int64  `json:"available"`
+	frozen      int64  `json:"frozen"`
+	latestRound int64  `json:"latestRound"`
+	loginStreak int64  `json:"loginStreak"`
+}
+
+type PointsResponse {
+	BaseResp
+	data PointsData `json:"data"`
+}
+
+type SubmitTaskRequest {
+	wallet      string `json:"wallet"`
+	taskCode    string `json:"taskCode"`
+	proveParams string `json:"proveParams"`
+}
+
+type SubmitTaskData {
+	points      int64 `json:"points"`
+	totalPoints int64 `json:"totalPoints"`
+}
+
+type SubmitTaskResponse {
+	BaseResp
+	data SubmitTaskData `json:"data"`
+}
+
+type ClaimProofRequest {
+	roundId int64 `json:"roundId"`
+}
+
+type ClaimProofData {
+	roundId int64    `json:"roundId"`
+	wallet  string   `json:"wallet"`
+	amount  int64    `json:"amount"`
+	proof   []string `json:"proof"`
+}
+
+type ClaimProofResponse {
+	BaseResp
+	data ClaimProofData `json:"data"`
+}
+
+service airdrop-api {
+	@handler Login
+	post /api/airdrop/v1/auth/login (LoginRequest) returns (LoginResponse)
+
+	@handler GetPoints
+	get /api/airdrop/v1/me/points returns (PointsResponse)
+
+	@handler StartRound
+	post /api/airdrop/v1/admin/airdrop/start (StartRoundRequest) returns (RoundInfoResponse)
+
+	@handler RoundInfo
+	get /api/airdrop/v1/admin/airdrop/round (RoundInfoRequest) returns (RoundInfoResponse)
+
+	@handler SubmitTask
+	post /api/airdrop/v1/airdrop/task/submit (SubmitTaskRequest) returns (SubmitTaskResponse)
+
+	@handler GetProofTask
+	get /api/airdrop/v1/airdrop/me/proof (ClaimProofRequest) returns (ClaimProofResponse)
+}
+

@@ -1,0 +1,24 @@
+Name: airdrop-api
+Host: 0.0.0.0
+Port: 8888
+Mode: dev
+
+Mysql:
+  DSN: root:123456@tcp(127.0.0.1:3306)/airdrop?charset=utf8mb4&parseTime=true&loc=Local
+  MaxIdle: 5
+  MaxOpen: 10
+
+Auth:
+  AccessSecret: "replace-with-strong-secret"
+  AccessExpire: 72000
+
+Admin:
+  Wallets:
+    - "0xa27b6d5f1c0Ce106428B128307b652Ba6d1ba6c5"
+
+Eth:
+  Enabled: false
+  RPC: ""
+  DistributorAddress: ""
+  StartBlock: 0
+  PollInterval: 15s

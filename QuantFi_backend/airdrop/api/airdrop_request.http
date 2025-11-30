@@ -1,0 +1,63 @@
+@wallet = 0xYourWalletAddress000000000000000000000000
+@signature = 0xSignatureFromWalletSignMessage
+@baseUrl = http://127.0.0.1:8888
+@timestamp = {{$timestamp}}
+@roundId = 1
+@taskName = daily_checkin
+
+###
+### 用户登录，换取 JWT
+### @name login
+POST {{baseUrl}}/api/airdrop/v1/auth/login
+Content-Type: application/json
+
+{
+  "wallet": "{{wallet}}",
+  "signature": "{{signature}}",
+  "timestamp": {{timestamp}}
+}
+
+{{
+  $global.accessToken=response.parsedBody.data.accessToken;
+}}
+
+###
+### 查询当前用户积分，需要 Bearer Token
+GET {{baseUrl}}/api/airdrop/v1/me/points
+Authorization: Bearer {{$global.accessToken}}
+
+
+
+###
+### 发起空投领取（需要在后台配置轮次）
+POST {{baseUrl}}/api/airdrop/v1/airdrop/claim
+Authorization: Bearer {{$global.accessToken}}
+Content-Type: application/json
+
+{
+  "roundId": {{roundId}},
+  "wallet": "{{wallet}}",
+  "amount": 100,
+  "proof": [
+    "0xProofLeaf00000000000000000000000000000000000000000000000000000000000000",
+    "0xProofBranch000000000000000000000000000000000000000000000000000000000000"
+  ]
+}
+
+###
+### 查询当前空投轮次（管理员 JWT）
+GET {{baseUrl}}/api/airdrop/v1/admin/airdrop/round
+Authorization: Bearer {{$global.accessToken}}
+
+###
+### 启动新一轮空投（管理员 JWT）
+POST {{baseUrl}}/api/airdrop/v1/admin/airdrop/start
+Authorization: Bearer {{$global.accessToken}}
+Content-Type: application/json
+
+{
+  "roundName": "Season-1",
+  "merkleRoot": "0xMerkleRoot000000000000000000000000000000000000000000000000000000000000",
+  "tokenAddress": "0xTokenAddress000000000000000000000000000000000000",
+  "claimDeadline": 1730390400
+}
