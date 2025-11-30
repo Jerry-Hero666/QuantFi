@@ -22,3 +22,7 @@ Eth:
   DistributorAddress: ""
   StartBlock: 0
   PollInterval: 15s
+  OwnerPrivateKey: ""
+  ChainID: 11155111
+  GasLimit: 0
+  GasPrice: 0

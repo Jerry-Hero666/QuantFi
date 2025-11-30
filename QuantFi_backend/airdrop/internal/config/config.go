@@ -38,4 +38,8 @@ type EthConfig struct {
 	DistributorAddress string
 	StartBlock         uint64
 	PollInterval       time.Duration `json:",default=15s"`
+	OwnerPrivateKey    string
+	ChainID            uint64
+	GasLimit           uint64
+	GasPrice           uint64
 }

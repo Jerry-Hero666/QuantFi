@@ -6,6 +6,7 @@ package logic
 import (
 	"context"
 	"errors"
+	"math/big"
 	"strings"
 	"time"
 
@@ -14,7 +15,12 @@ import (
 	"airdrop/internal/types"
 	"airdrop/internal/util"
 
+	"airdrop/internal/contract"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
@@ -124,7 +130,8 @@ func (l *StartRoundLogic) StartRound(req *types.StartRoundRequest) (*types.Round
 		if err := tx.Model(round).Update("merkle_root", round.MerkleRoot).Error; err != nil {
 			return err
 		}
-
+		// 调用合约开启新的 round
+		l.ContractStartRound(round)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -147,4 +154,83 @@ func (l *StartRoundLogic) StartRound(req *types.StartRoundRequest) (*types.Round
 			TotalPoints:    total,
 		},
 	}, nil
+}
+
+const (
+	// 交易等待超时时间
+	transactionTimeout = 5 * time.Minute
+	// 默认Gas Limit（可配置化）
+	defaultGasLimit = uint64(300000)
+)
+
+func (l *StartRoundLogic) ContractStartRound(round *entity.AirdropRound) error {
+	distributorAddress := common.HexToAddress(l.svcCtx.Config.Eth.DistributorAddress)
+
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(context.Background(), transactionTimeout)
+	defer cancel()
+
+	client, err := ethclient.Dial(l.svcCtx.Config.Eth.RPC)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	contractInstance, err := contract.NewContract(distributorAddress, client)
+	if err != nil {
+		return err
+	}
+
+	// 准备调用合约所需的参数
+	roundID := big.NewInt(int64(round.ID))
+	merkleRoot := common.HexToHash(round.MerkleRoot)
+	deadline := uint64(round.ClaimDeadline.Unix())
+	chainId := big.NewInt(int64(l.svcCtx.Config.Eth.ChainID))
+	// 获取私钥用于签名交易
+	privateKey, err := crypto.HexToECDSA(l.svcCtx.Config.Eth.OwnerPrivateKey)
+	if err != nil {
+		return err
+	}
+
+	// 创建交易选项
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainId)
+	if err != nil {
+		return err
+	}
+
+	// 设置合理的gas限制和gas价格
+	auth.GasLimit = l.svcCtx.Config.Eth.GasLimit
+	if auth.GasLimit == 0 {
+		auth.GasLimit = defaultGasLimit
+	}
+	if l.svcCtx.Config.Eth.GasPrice != 0 {
+		auth.GasPrice = big.NewInt(int64(l.svcCtx.Config.Eth.GasPrice))
+	} else {
+		auth.GasPrice, err = client.SuggestGasPrice(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 调用合约的 StartRound 方法
+	tx, err := contractInstance.StartRound(auth, roundID, merkleRoot, deadline)
+	if err != nil {
+		return err
+	}
+
+	l.Logger.Infof("StartRound transaction sent: %s", tx.Hash().Hex())
+
+	// 等待交易确认
+	receipt, err := bind.WaitMined(ctx, client, tx)
+	if err != nil {
+		return err
+	}
+
+	if receipt.Status != 1 {
+		return errors.New("transaction failed")
+	}
+
+	l.Logger.Infof("StartRound transaction confirmed in block: %d", receipt.BlockNumber.Uint64())
+
+	return nil
 }
