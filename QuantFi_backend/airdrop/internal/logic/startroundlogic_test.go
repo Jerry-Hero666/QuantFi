@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -25,10 +26,10 @@ func TestStartRoundLogic(t *testing.T) {
 	}
 	req := &types.StartRoundRequest{
 		RoundName:     "Genesis",
-		MerkleRoot:    "", // MerkleRoot 现在会自动生成
 		TokenAddress:  "0xdef",
-		ClaimDeadline: time.Now().Add(1 * time.Hour).Unix(),
+		ClaimDeadline: time.Now().Add(24 * 365 * time.Hour).Unix(),
 	}
+	t.Logf("claim deadline: %d", req.ClaimDeadline)
 	resp, err := NewStartRoundLogic(context.Background(), svcCtx).StartRound(req)
 	if err != nil {
 		t.Fatalf("start round: %v", err)
@@ -56,11 +57,14 @@ func TestStartRoundLogic(t *testing.T) {
 	}
 
 	// 手动计算 MerkleRoot 进行验证
+	pointsBig := big.NewInt(800)
+	weiMultiplier := big.NewInt(1e18)
+	amount := new(big.Int).Mul(pointsBig, weiMultiplier)
 	leaves := []util.MerkleLeaf{
 		{
 			RoundID: uint64(round.ID),
 			Wallet:  strings.ToLower(user.Wallet),
-			Amount:  800,
+			Amount:  amount,
 		},
 	}
 	expectedRoot, _, err := util.BuildMerkleTree(leaves)
@@ -113,7 +117,6 @@ func TestStartRoundLogic_MultipleUsers(t *testing.T) {
 
 	req := &types.StartRoundRequest{
 		RoundName:     "MultiUserRound",
-		MerkleRoot:    "",
 		TokenAddress:  "0xtoken",
 		ClaimDeadline: time.Now().Add(1 * time.Hour).Unix(),
 	}
@@ -134,21 +137,22 @@ func TestStartRoundLogic_MultipleUsers(t *testing.T) {
 	}
 
 	// 手动计算 MerkleRoot
+	weiMultiplier := big.NewInt(1e18)
 	leaves := []util.MerkleLeaf{
 		{
 			RoundID: uint64(round.ID),
 			Wallet:  strings.ToLower(users[0].Wallet),
-			Amount:  1000,
+			Amount:  new(big.Int).Mul(big.NewInt(1000), weiMultiplier),
 		},
 		{
 			RoundID: uint64(round.ID),
 			Wallet:  strings.ToLower(users[1].Wallet),
-			Amount:  2000,
+			Amount:  new(big.Int).Mul(big.NewInt(2000), weiMultiplier),
 		},
 		{
 			RoundID: uint64(round.ID),
 			Wallet:  strings.ToLower(users[2].Wallet),
-			Amount:  1500,
+			Amount:  new(big.Int).Mul(big.NewInt(1500), weiMultiplier),
 		},
 	}
 	expectedRoot, _, err := util.BuildMerkleTree(leaves)
@@ -171,7 +175,6 @@ func TestStartRoundLogic_NoUsers(t *testing.T) {
 
 	req := &types.StartRoundRequest{
 		RoundName:     "EmptyRound",
-		MerkleRoot:    "",
 		TokenAddress:  "0xtoken",
 		ClaimDeadline: time.Now().Add(1 * time.Hour).Unix(),
 	}

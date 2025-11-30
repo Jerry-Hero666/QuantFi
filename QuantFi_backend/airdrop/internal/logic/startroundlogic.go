@@ -55,7 +55,6 @@ func (l *StartRoundLogic) StartRound(req *types.StartRoundRequest) (*types.Round
 		MerkleRoot:    "", // 将在生成后更新
 		TokenAddress:  strings.ToLower(req.TokenAddress),
 		ClaimDeadline: deadline,
-		Status:        "active",
 	}
 
 	now := time.Now().UTC()
@@ -93,10 +92,14 @@ func (l *StartRoundLogic) StartRound(req *types.StartRoundRequest) (*types.Round
 			}
 
 			// 收集 Merkle 叶子节点数据
+			// 使用 big.Int 进行安全的大数乘法，避免整数溢出
+			pointsBig := big.NewInt(u.PointsBalance)
+			weiMultiplier := big.NewInt(1e18)
+			amount := new(big.Int).Mul(pointsBig, weiMultiplier)
 			merkleLeaves = append(merkleLeaves, util.MerkleLeaf{
 				RoundID: uint64(round.ID),
 				Wallet:  strings.ToLower(u.Wallet),
-				Amount:  u.PointsBalance,
+				Amount:  amount,
 			})
 
 			u.FrozenPoints = u.PointsBalance
@@ -130,12 +133,18 @@ func (l *StartRoundLogic) StartRound(req *types.StartRoundRequest) (*types.Round
 		if err := tx.Model(round).Update("merkle_root", round.MerkleRoot).Error; err != nil {
 			return err
 		}
-		// 调用合约开启新的 round
-		l.ContractStartRound(round)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	// 在事务外部调用合约，避免长时间阻塞数据库事务
+	// 使用 goroutine 异步执行，不阻塞 HTTP 响应
+	go func() {
+		if err := l.ContractStartRound(round); err != nil {
+			l.Logger.Errorf("failed to start round on contract: %v", err)
+		}
+	}()
 
 	var total int64
 	l.svcCtx.DB.WithContext(l.ctx).Model(&entity.RoundPoint{}).Where("round_id = ?", round.ID).Select("COALESCE(SUM(points),0)").Scan(&total)
@@ -231,6 +240,6 @@ func (l *StartRoundLogic) ContractStartRound(round *entity.AirdropRound) error {
 	}
 
 	l.Logger.Infof("StartRound transaction confirmed in block: %d", receipt.BlockNumber.Uint64())
-
+	l.svcCtx.DB.Model(&entity.AirdropRound{}).Where("id = ?", round.ID).Update("status", "active")
 	return nil
 }

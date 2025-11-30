@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/binary"
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -12,33 +13,33 @@ import (
 type MerkleLeaf struct {
 	RoundID uint64
 	Wallet  string
-	Amount  int64
+	Amount  *big.Int
 }
 
 // LeafHash computes the keccak256 hash of abi.encodePacked(roundId, wallet, amount)
 // This matches the Solidity contract's leaf calculation
-func LeafHash(roundID uint64, wallet string, amount int64) []byte {
+func LeafHash(roundID uint64, wallet string, amount *big.Int) []byte {
 	// Normalize wallet address
 	walletAddr := common.HexToAddress(wallet)
-	
+
 	// Encode: roundId (uint256) + wallet (address) + amount (uint256)
 	// In Solidity: abi.encodePacked(roundId, msg.sender, amount)
 	// abi.encodePacked concatenates without padding, but for uint256 we need 32 bytes
 	data := make([]byte, 0, 32+20+32)
-	
+
 	// roundId as uint256 (32 bytes, big-endian)
 	roundBytes := make([]byte, 32)
 	binary.BigEndian.PutUint64(roundBytes[24:], roundID)
 	data = append(data, roundBytes...)
-	
+
 	// wallet as address (20 bytes)
 	data = append(data, walletAddr.Bytes()...)
-	
+
 	// amount as uint256 (32 bytes, big-endian)
 	amountBytes := make([]byte, 32)
-	binary.BigEndian.PutUint64(amountBytes[24:], uint64(amount))
+	binary.BigEndian.PutUint64(amountBytes[24:], amount.Uint64())
 	data = append(data, amountBytes...)
-	
+
 	hash := crypto.Keccak256(data)
 	return hash
 }
@@ -48,7 +49,7 @@ func BuildMerkleTree(leaves []MerkleLeaf) (root []byte, proofs map[string][][]by
 	if len(leaves) == 0 {
 		return nil, nil, errors.New("empty leaves")
 	}
-	
+
 	// Compute leaf hashes
 	leafHashes := make([][]byte, len(leaves))
 	walletToIndex := make(map[string]int) // map[wallet]index
@@ -56,15 +57,15 @@ func BuildMerkleTree(leaves []MerkleLeaf) (root []byte, proofs map[string][][]by
 		leafHashes[i] = LeafHash(leaf.RoundID, leaf.Wallet, leaf.Amount)
 		walletToIndex[leaf.Wallet] = i
 	}
-	
+
 	// Build tree level by level, storing all levels for proof generation
 	levels := make([][][]byte, 0)
 	levels = append(levels, leafHashes)
 	currentLevel := leafHashes
-	
+
 	for len(currentLevel) > 1 {
 		nextLevel := make([][]byte, 0, (len(currentLevel)+1)/2)
-		
+
 		for i := 0; i < len(currentLevel); i += 2 {
 			var hash []byte
 			if i+1 < len(currentLevel) {
@@ -81,19 +82,19 @@ func BuildMerkleTree(leaves []MerkleLeaf) (root []byte, proofs map[string][][]by
 			}
 			nextLevel = append(nextLevel, hash)
 		}
-		
+
 		levels = append(levels, nextLevel)
 		currentLevel = nextLevel
 	}
-	
+
 	root = currentLevel[0]
-	
+
 	// Generate proofs for each wallet
 	proofs = make(map[string][][]byte)
 	for wallet, leafIdx := range walletToIndex {
 		proof := make([][]byte, 0)
 		idx := leafIdx
-		
+
 		// Traverse up the tree, collecting sibling hashes
 		for level := 0; level < len(levels)-1; level++ {
 			siblingIdx := idx ^ 1 // XOR to get sibling index
@@ -105,31 +106,30 @@ func BuildMerkleTree(leaves []MerkleLeaf) (root []byte, proofs map[string][][]by
 			}
 			idx = idx / 2
 		}
-		
+
 		proofs[wallet] = proof
 	}
-	
+
 	return root, proofs, nil
 }
 
 // GenerateProof generates merkle proof for a specific wallet
-func GenerateProof(roundID uint64, wallet string, amount int64, allLeaves []MerkleLeaf) ([]string, error) {
+func GenerateProof(roundID uint64, wallet string, amount *big.Int, allLeaves []MerkleLeaf) ([]string, error) {
 	_, proofs, err := BuildMerkleTree(allLeaves)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	proof, exists := proofs[wallet]
 	if !exists {
 		return nil, errors.New("wallet not found in leaves")
 	}
-	
+
 	// Convert proof to hex strings
 	proofStrs := make([]string, len(proof))
 	for i, p := range proof {
 		proofStrs[i] = common.BytesToHash(p).Hex()
 	}
-	
+
 	return proofStrs, nil
 }
-

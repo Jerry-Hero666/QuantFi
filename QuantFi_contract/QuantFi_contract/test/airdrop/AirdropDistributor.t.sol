@@ -17,7 +17,7 @@ contract AirdropDistributorTest is Test {
     function setUp() public {
         // 开始以 admin 身份执行后续所有操作
         vm.startPrank(admin);
-        token = new MockERC20("MockERC20", "ADP", admin);
+        token = new MockERC20("AirdropToken", "ADPT", 18);
         distributor = new AirdropDistributor(address(token), admin);
         token.mint(address(distributor), 1_000_000 ether);
         // 停止 prank，恢复为默认调用者

@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -95,8 +96,10 @@ func TestGetProofTaskLogic(t *testing.T) {
 		t.Fatalf("expected wallet %s, got %s", user1.Wallet, resp.Data.Wallet)
 	}
 
-	if resp.Data.Amount != rp1.Points {
-		t.Fatalf("expected amount %d, got %d", rp1.Points, resp.Data.Amount)
+	// 将 Points 转换为 wei 单位进行比较
+	expectedAmount := new(big.Int).Mul(big.NewInt(rp1.Points), big.NewInt(1e18))
+	if resp.Data.Amount.Cmp(expectedAmount) != 0 {
+		t.Fatalf("expected amount %s, got %s", expectedAmount.String(), resp.Data.Amount.String())
 	}
 
 	if len(resp.Data.Proof) == 0 {
@@ -133,4 +136,3 @@ func TestGetProofTaskLogic(t *testing.T) {
 		t.Fatalf("expected error for user not in round")
 	}
 }
-

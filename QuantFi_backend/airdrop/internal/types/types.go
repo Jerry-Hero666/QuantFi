@@ -3,6 +3,8 @@
 
 package types
 
+import "math/big"
+
 type BaseResp struct {
 	Code int64  `json:"code"`
 	Msg  string `json:"msg"`
@@ -11,7 +13,7 @@ type BaseResp struct {
 type ClaimProofData struct {
 	RoundId int64    `json:"roundId"`
 	Wallet  string   `json:"wallet"`
-	Amount  int64    `json:"amount"`
+	Amount  *big.Int `json:"amount"`
 	Proof   []string `json:"proof"`
 }
 
@@ -76,7 +78,6 @@ type RoundInfoResponse struct {
 
 type StartRoundRequest struct {
 	RoundName     string `json:"roundName"`
-	MerkleRoot    string `json:"merkleRoot"`
 	TokenAddress  string `json:"tokenAddress"`
 	ClaimDeadline int64  `json:"claimDeadline"`
 }

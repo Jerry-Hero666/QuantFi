@@ -13,6 +13,8 @@ import (
 	"airdrop/internal/types"
 	"airdrop/internal/util"
 
+	"math/big"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	"gorm.io/gorm"
 )
@@ -101,15 +103,22 @@ func (l *GetProofTaskLogic) GetProofTask(req *types.ClaimProofRequest) (resp *ty
 			l.Logger.Errorf("user %d not found for round point", rp.UserID)
 			continue
 		}
+		// 使用 big.Int 进行安全的大数乘法，避免整数溢出
+		pointsBig := big.NewInt(rp.Points)
+		weiMultiplier := big.NewInt(1e18)
+		amount := new(big.Int).Mul(pointsBig, weiMultiplier)
 		leaves = append(leaves, util.MerkleLeaf{
 			RoundID: roundID,
 			Wallet:  wallet,
-			Amount:  rp.Points,
+			Amount:  amount,
 		})
 	}
 
 	// Generate merkle proof
-	proof, err := util.GenerateProof(roundID, user.Wallet, roundPoint.Points, leaves)
+	pointsBig := big.NewInt(roundPoint.Points)
+	weiMultiplier := big.NewInt(1e18)
+	amount := new(big.Int).Mul(pointsBig, weiMultiplier)
+	proof, err := util.GenerateProof(roundID, user.Wallet, amount, leaves)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +135,7 @@ func (l *GetProofTaskLogic) GetProofTask(req *types.ClaimProofRequest) (resp *ty
 		Data: types.ClaimProofData{
 			RoundId: req.RoundId,
 			Wallet:  user.Wallet,
-			Amount:  roundPoint.Points,
+			Amount:  amount,
 			Proof:   proof,
 		},
 	}, nil
