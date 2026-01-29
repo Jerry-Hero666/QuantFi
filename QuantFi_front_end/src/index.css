@@ -1,0 +1,78 @@
+@import '@rainbow-me/rainbowkit/styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    background: #000000;
+    color: #ffffff;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: #f9fafb;
+    font-weight: 600;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .gradient-cyan {
+    background: linear-gradient(to right, #00D4FF, #33DDFF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .title-glow {
+    color: #ffffff;
+    text-shadow:
+      0 0 10px rgba(0, 212, 255, 0.3),
+      0 0 20px rgba(0, 212, 255, 0.2),
+      0 0 30px rgba(0, 212, 255, 0.1);
+  }
+
+  .hero-title-glow {
+    color: #ffffff;
+    text-shadow:
+      0 0 20px rgba(255, 255, 255, 0.4),
+      0 0 40px rgba(0, 212, 255, 0.3),
+      0 0 60px rgba(0, 212, 255, 0.2),
+      0 0 80px rgba(0, 212, 255, 0.1);
+  }
+
+  .text-7xl {
+    font-size: 4.5rem;
+    line-height: 1.2;
+  }
+
+  .text-6xl {
+    font-size: 3.75rem;
+    line-height: 1.2;
+  }
+
+  .text-5xl {
+    font-size: 3rem;
+    line-height: 1.2;
+  }
+}
